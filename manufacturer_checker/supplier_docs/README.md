@@ -36,6 +36,11 @@ document-type は manufacturer_list / quote_request / quote_response / catalog /
 
 - JANがExcel側で数値として保存されていた場合、失われた先頭ゼロは復元できません。警告します。
 - ASINが無題列にある場合は、B0で始まる10桁だけを**候補**として扱い、確認を要求します。
+- **複数ASIN**が1セルにある場合、`asin_candidates`に全候補を残し、`asin_candidate`（単一候補欄）は空にします。単品／セットを選びません。
+- **卸側の商品名が空欄でAmazon名／ASINのみ**の行も失わず記録し、`SUPPLIER_PRODUCT_UNKNOWN`を付けます。
+- **メーカー別シート**は`source_group`にシート名を保持しますが、シート名を契約先・製造元の確定情報に読み替えません。
+- **取引条件がグループ先頭行にしかない**場合、明確な連続行の範囲で注意情報を継承し、メーカー切替や空行でリセットします。金額・原文は既定の出力へ含めません。
+- 先頭ゼロの前に不可視文字が付いたJANは、除去したうえで警告します。元のコードが正しい保証はありません。
 - 見出しの同義列が重複した場合は片方を推測で選ばず、その項目の抽出を保留します。
 - 黒字（競合によっては赤字）等は条件付きと判断し、単純に黒字として採用しません。
 - EC不可・取り扱い不可・直送限定・定価販売等はリスクコードとして記録します。規制や契約上の実効性を判断する機能ではありません。
@@ -47,7 +52,7 @@ document-type は manufacturer_list / quote_request / quote_response / catalog /
     cd manufacturer_checker
     python -m unittest discover -s tests -p 'test_supplier_docs.py' -v
 
-テストはすべて架空データです。実際の取引先・仕入価格・Drive IDはコードに含めません。
+ワコーフーズとは異なる列順・複数ASIN・ケース条件を架空データで検証しています。テストはすべて架空データです。実際の取引先・仕入価格・Drive IDはコードに含めません。
 
 業務上の項目定義は非公開の amazon-business-knowledge/suppliers/field-schema.md を参照してください。公開リポジトリから直接参照・取得できるとは限りません。
 
