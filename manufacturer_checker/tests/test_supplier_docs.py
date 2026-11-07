@@ -157,6 +157,28 @@ class SupplierDocumentTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             sheets_values(api, spreadsheet_id='fake-id', sheet_range='A:L')
 
+    def test_sheets_numeric_jan_and_formula_are_flagged(self):
+        response = Mock()
+        response.execute.return_value = {
+            'values': [
+                ['商品名', 'JAN'],
+                ['架空商品A', 12345678],
+                ['架空商品B', '=12345678'],
+                ['架空商品C', '0012345678901'],
+            ]
+        }
+        api = Mock()
+        api.spreadsheets.return_value.values.return_value.get.return_value = response
+        rows = sheets_values(api, spreadsheet_id='fake-id', sheet_range="'架空'!A1:B4")
+        x = parse_rows(rows, document_type='catalog')
+        self.assertEqual([r['jan_string'] for r in x['records']],
+                         ['12345678', '', '0012345678901'])
+        codes = [c for warning in x['warnings'] for c in warning['codes']]
+        self.assertIn('JAN_NUMERIC_CELL', codes)
+        self.assertIn('JAN_FORMULA', codes)
+        api.spreadsheets.return_value.values.return_value.get.assert_called_once_with(
+            spreadsheetId='fake-id', range="'架空'!A1:B4", valueRenderOption='FORMULA')
+
     def test_cli_default_redacted_and_exclusive_write(self):
         with tempfile.TemporaryDirectory() as d:
             file = Path(d) / 'sample.csv'
