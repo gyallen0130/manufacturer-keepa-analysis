@@ -153,7 +153,7 @@ class SupplierDocumentTests(unittest.TestCase):
         data = sheets_values(api, spreadsheet_id='fake-id', sheet_range="'見積もり'!A1:L20")
         self.assertEqual(data[1][1], '0012345678901')
         api.spreadsheets.return_value.values.return_value.get.assert_called_once_with(
-            spreadsheetId='fake-id', range="'見積もり'!A1:L20", valueRenderOption='FORMATTED_VALUE')
+            spreadsheetId='fake-id', range="'見積もり'!A1:L20", valueRenderOption='FORMULA')
         with self.assertRaises(ValueError):
             sheets_values(api, spreadsheet_id='fake-id', sheet_range='A:L')
 
