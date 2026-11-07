@@ -34,6 +34,18 @@ Google Workspaceでは、サービスアカウントのアドレスを対象シ�
 
 document-type は manufacturer_list / quote_request / quote_response / catalog / price_revision から**原本の性質を確認して**選択してください。見積依頼を回答済み見積として扱わないため、自動推定しません。見出し行は先頭20行から推定し、必要なら --header-row 2 を指定します。対象の表範囲は原本に合わせて狭く指定してください。
 
+## 複数シートの安全な取得（開発用アダプタ）
+
+`supplier_docs.readers.sheets_visible_tabs` は、指定されたSpreadsheetの**表示中の通常シート**の名前だけをSheets APIのメタデータで取得します。非表示・オブジェクトシートは対象外です。
+
+`supplier_docs.readers.sheets_selected_tabs_summary` は、呼び出し元が**タブ名と文書種別を明示したシートだけ**を指定行数・指定列まで読み込み、匿名の件数・注意コードを集計します。
+
+- 文書種別はタブごとに指定が必要で、`manufacturer_list` / `quote_request` などの自動推測はしません。
+- 既定は最大10タブ、タブあたり先頭40行・A:L列。合計50,000セルを超える指定を読み取り前に拒否します。
+- 非表示・未指定・存在しないタブを勝手に読み込みません。見出しが判定できない場合は `needs_review` として扱います。
+- 返すのはタブ順の番号・件数・リスクコード等だけです。タブ名、原価、JAN、ASIN、商品名、原本IDは集計結果に含めません。
+- 現時点では**Pythonライブラリの開発用機能**です。既存のColab試運転やGitHub Actions本番ワークフローから自動実行するようには変更していません。実データでの複数シート一括実行は未検証です。
+
 ## 安全なAPI接続の試運転
 
 上の鍵なし代理認証手順に従い、まず1シートの40行以内だけを `--summary-only` で試験してください。サービスアカウントはViewer権限のみ、トークンは15分の `spreadsheets.readonly` スコープです。
