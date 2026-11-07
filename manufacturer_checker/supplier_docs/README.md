@@ -12,28 +12,37 @@ Google Driveのメーカー／卸問屋別フォルダにある見積書・商�
     pip install -r requirements.txt
     python -m supplier_docs.cli --input /path/to/quote.xlsx --sheet-name 見積もり --document-type quote_response
 
-Google Sheetsは、**認可済みで読み取り専用スコープを備えた**Google Application Default Credentials（ADC）がある場合のみ利用できます。
+Google Sheetsを読み取る場合、**専用のサービスアカウントを鍵なしで代理認証**します。ログイン元のGoogleアカウント（ColabやCloud ShellのADC）は、専用アカウントへ一時的に代理認証できる必要があります。PythonコードからSheets APIへ渡すのは **`spreadsheets.readonly` だけの15分間の代理認証トークン**です。
 
-    python -m supplier_docs.cli --sheets-id SHEET_ID --sheet-range "'見積もり'!A1:L300" --document-type quote_response
+### 最初に必要なGoogle Cloud設定（ユーザーによる操作）
 
-ADCとSheets APIの有効化・対象ファイルの共有権限の準備が別途必要です。APIは spreadsheets.values.get のみを実行し、Drive内のファイルを変更しません。
+1. 取引先資料用に、新規の専用サービスアカウント（例：`supplier-docs-reader@YOUR_PROJECT_ID.iam.gserviceaccount.com`）を作成する。**既存のSP-API用サービスアカウントや秘密鍵を流用しない**。
+2. 同じCloudプロジェクトで **Google Sheets API** と **IAM Service Account Credentials API** を有効にする。
+3. Colabでログインする本人のGoogleアカウントに、**この新規サービスアカウント単体だけ**の `roles/iam.serviceAccountTokenCreator` を付与する。プロジェクト全体には付与しない。
+4. テストしたいGoogle Sheetsファイル**1件だけ**を、そのサービスアカウントのメールへ **閲覧者（Viewer）** で共有する。初回から取引先資料フォルダ全体は共有しない。
+5. サービスアカウント鍵（JSON/PEM）は**作成しない**。認証の準備やユーザー承認ができるまでは接続試験を実行しない。
+
+設定後、[Colabで安全な集計試験を開く](https://colab.research.google.com/github/gyallen0130/manufacturer-keepa-analysis/blob/feature/supplier-docs-normalizer-v1/notebooks/supplier_docs_readonly_smoke.ipynb) から手順に沿って実行できます。NotebookはPythonコードを検証済みコミットに固定して取得し、IDは非表示入力、結果は集計のみ表示します。ChatGPTのGoogle Driveプラグインから認証情報を取得することはできません。
+
+同様に、Colabではなく**ユーザー自身の認証済みローカル環境**でCLIを実行する場合：
+
+    python -m supplier_docs.cli --sheets-id YOUR_SHEET_ID --sheet-range "'見積もり'!A1:L40" --document-type quote_request --impersonate-service-account supplier-docs-reader@YOUR_PROJECT_ID.iam.gserviceaccount.com --summary-only
+
+`--sheets-id` では専用アカウントの指定と `--summary-only` が**必須**です。ユーザーADCを暗黙に直接利用したり、取引先名や卸値などの生データをコンソール出力したりするモードは拒否します。
+
+Google Workspaceでは、サービスアカウントのアドレスを対象シートの**共有先**としてViewerに指定できます。権限と共有設定の詳細は [Googleの公式説明](https://developers.google.com/workspace/guides/create-credentials)、鍵なし代理認証は [google-authの公式説明](https://googleapis.dev/python/google-auth/latest/reference/google.auth.impersonated_credentials.html) を参照してください。
 
 document-type は manufacturer_list / quote_request / quote_response / catalog / price_revision から**原本の性質を確認して**選択してください。見積依頼を回答済み見積として扱わないため、自動推定しません。見出し行は先頭20行から推定し、必要なら --header-row 2 を指定します。対象の表範囲は原本に合わせて狭く指定してください。
 
 ## 安全なAPI接続の試運転
 
-実際のGoogle Sheetsへプログラムから接続するには、**別途** Google Application Default Credentials (ADC) と対象ファイルの読み取り権限が必要です。ChatGPTのGoogle Drive接続は、Pythonプログラムへ認証情報を提供しません。
+上の鍵なし代理認証手順に従い、まず1シートの40行以内だけを `--summary-only` で試験してください。サービスアカウントはViewer権限のみ、トークンは15分の `spreadsheets.readonly` スコープです。
 
-初回は少数セルの明示的な範囲（例：`'見積もり'!A1:L40`）を読み、詳細をログに出さない集計モードで確認してください。
-
-    python -m supplier_docs.cli --sheets-id YOUR_SHEET_ID --sheet-range "'見積もり'!A1:L40" --document-type quote_request --summary-only
-
-- Google Sheets APIの要求は `spreadsheets.values.get` だけで、`spreadsheets.readonly` スコープを要求します。
-- `--sheet-range` は行・列の両端を指定した有限のA1範囲のみ許可し、最大50,000セルです。列全体や全シートは拒否します。
-- `--summary-only` はレコード数、リスク・警告のコード別件数のみを出力し、メーカー名・商品名・JAN・ASIN・仕入値・ファイルIDを出しません。
-- `--include-sensitive` と `--summary-only` は併用できません。
-- 実際の会社の資料を読み取る場合は、必要な閲覧権限を持つ承認済みアカウントで実行し、個別情報をコンソール・CI・Public Issueに貼らないでください。
-- 本リポジトリの自動テストはAPI認証を使わない合成テストです。初回のGoogle実認証試験は**まだ行っていません**。
+- `--sheet-range` は有限のA1範囲（最大50,000セル）しか受け付けません。
+- `--summary-only` の表示はレコード数と警告・リスクコードの件数のみです。ファイルID・商品名・JAN・ASIN・卸値・取引条件の原文を表示しません。
+- ソースコードにはSecret、実Google Sheets ID、取引価格・顧客情報を保存しません。
+- 実認証・権限付与は各Googleアカウント側の所有者操作が必要です。このPRのCIは合成データのテストのみです。
+- Google Sheets APIの読み取りだけを許可していますが、Colabなどでログインする**元のアカウントの権限自体を縮小するものではありません**。APIへ渡す専用アカウントを最小化する設計です。
 
 ## 出力と保護
 
