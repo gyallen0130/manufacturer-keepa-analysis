@@ -8,7 +8,8 @@ from pathlib import Path
 from unittest.mock import Mock
 from openpyxl import Workbook
 from supplier_docs import parse_rows
-from supplier_docs.readers import local_rows, sheets_values
+from supplier_docs.readers import (local_rows, sheets_values, sheets_visible_tabs,
+                                   sheets_selected_tabs_summary)
 
 
 class SupplierDocumentTests(unittest.TestCase):
@@ -292,6 +293,96 @@ class SupplierDocumentTests(unittest.TestCase):
             with self.assertRaises(ValueError, msg=value):
                 sheets_values(api, spreadsheet_id='fake-id', sheet_range=value)
         api.spreadsheets.assert_not_called()
+
+    def test_selected_tabs_summary_is_bounded_and_redacted(self):
+        api = Mock()
+        api.spreadsheets.return_value.get.return_value.execute.return_value = {
+            'sheets': [
+                {'properties': {'title': '架空一', 'sheetType': 'GRID'}},
+                {'properties': {'title': '架空二', 'sheetType': 'GRID'}},
+            ],
+        }
+
+        def read_tab(*, spreadsheetId, range, valueRenderOption):
+            self.assertEqual(spreadsheetId, 'fake-id')
+            self.assertEqual(valueRenderOption, 'FORMULA')
+            response = Mock()
+            if range.startswith("'架空一'!"):
+                response.execute.return_value = {'values': [
+                    ['メーカー', '商品名', 'ASIN', '下代(税抜)'],
+                    ['秘密卸', '極秘商品', 'B012345678', 1234],
+                ]}
+            else:
+                response.execute.return_value = {'values': [
+                    ['メーカー', '商品名', '卸値', '卸値（税込）', 'ASIN'],
+                    ['秘密卸', '極秘商品２', 1100, 1210, 'B098765432'],
+                ]}
+            return response
+        api.spreadsheets.return_value.values.return_value.get.side_effect = read_tab
+        result = sheets_selected_tabs_summary(
+            api, spreadsheet_id='fake-id',
+            tab_document_types={'架空一': 'quote_request', '架空二': 'quote_request'},
+            max_rows_per_tab=10, end_col='J')
+        self.assertEqual(result['total_record_count'], 2)
+        self.assertEqual(result['risk_counts']['ASIN_UNVERIFIED'], 2)
+        self.assertEqual(result['warning_code_counts']['AMBIGUOUS_COLUMNS'], 1)
+        self.assertTrue(result['tabs'][1]['has_ambiguous_columns'])
+        self.assertEqual(result['tabs'][0]['tab_index'], 1)
+        output = json.dumps(result, ensure_ascii=False)
+        for sensitive in ['架空一', '架空二', '秘密卸', '極秘商品',
+                          'B012345678', 'B098765432', '1234', '1210', 'fake-id']:
+            self.assertNotIn(sensitive, output)
+        api.spreadsheets.return_value.get.assert_called_once_with(
+            spreadsheetId='fake-id', fields='sheets(properties(title,sheetType,hidden))')
+        self.assertEqual(api.spreadsheets.return_value.values.return_value.get.call_count, 2)
+
+    def test_hidden_and_missing_tabs_fail_before_value_read(self):
+        api = Mock()
+        api.spreadsheets.return_value.get.return_value.execute.return_value = {
+            'sheets': [
+                {'properties': {'title': '表示中', 'sheetType': 'GRID'}},
+                {'properties': {'title': '非表示', 'sheetType': 'GRID', 'hidden': True}},
+                {'properties': {'title': '図表', 'sheetType': 'OBJECT'}},
+            ],
+        }
+        self.assertEqual(sheets_visible_tabs(api, spreadsheet_id='fake-id'),
+                         ['表示中'])
+        for selected in ['非表示', '存在しない']:
+            with self.assertRaises(ValueError):
+                sheets_selected_tabs_summary(
+                    api, spreadsheet_id='fake-id',
+                    tab_document_types={selected: 'quote_request'})
+        api.spreadsheets.return_value.values.assert_not_called()
+
+    def test_selected_tabs_reject_large_or_unknown_input_before_api_call(self):
+        api = Mock()
+        too_many = {f'架空{i}': 'quote_request' for i in range(11)}
+        inputs = [
+            (too_many, 40, 'L'),
+            ({'架空': 'quote_request'}, 20000, 'Z'),
+            ({'架空': 'not-a-type'}, 40, 'L'),
+            ({'架空': 'quote_request'}, 40, 'AA'),
+        ]
+        for docs, rows, col in inputs:
+            with self.assertRaises(ValueError):
+                sheets_selected_tabs_summary(
+                    api, spreadsheet_id='fake-id',
+                    tab_document_types=docs, max_rows_per_tab=rows, end_col=col)
+        api.spreadsheets.assert_not_called()
+
+    def test_selected_tabs_reports_unknown_header_without_leaking_rows(self):
+        api = Mock()
+        api.spreadsheets.return_value.get.return_value.execute.return_value = {
+            'sheets': [{'properties': {'title': '架空帳票', 'sheetType': 'GRID'}}]}
+        api.spreadsheets.return_value.values.return_value.get.return_value.execute.return_value = {
+            'values': [['秘密会計情報', 'シークレット'], ['極秘', '1000']]}
+        result = sheets_selected_tabs_summary(
+            api, spreadsheet_id='fake-id',
+            tab_document_types={'架空帳票': 'quote_request'})
+        self.assertEqual(result['tabs'], [
+            {'tab_index': 1, 'document_type': 'quote_request',
+             'status': 'needs_review', 'record_count': 0}])
+        self.assertNotIn('秘密', json.dumps(result, ensure_ascii=False))
 
     def test_cli_summary_only_omits_business_values(self):
         with tempfile.TemporaryDirectory() as d:
