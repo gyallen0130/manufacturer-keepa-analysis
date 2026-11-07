@@ -35,14 +35,14 @@ def local_rows(path, *, sheet_name=None, encoding=None, max_file_bytes=20_000_00
 def sheets_values(service, *, spreadsheet_id, sheet_range):
     """Read only: caller supplies an authenticated Sheets v4 client and explicit A1 range.
 
-    FORMATTED_VALUE is used for display strings. Do not infer leading zeros
-    for identifier cells that were already stored incorrectly as numbers.
+    FORMULA preserves numeric cell types and returns formulas as text.
+    Never evaluate formula strings or infer lost leading zeros for numeric identifiers.
     """
     if not spreadsheet_id or not sheet_range or '!' not in sheet_range:
         raise ValueError('sheet id and a bounded sheet!A1 range are required')
     result = (service.spreadsheets().values().get(
         spreadsheetId=spreadsheet_id,
         range=sheet_range,
-        valueRenderOption='FORMATTED_VALUE',
+        valueRenderOption='FORMULA',
     ).execute())
     return result.get('values', [])
