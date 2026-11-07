@@ -60,6 +60,7 @@ document-type は manufacturer_list / quote_request / quote_response / catalog /
 
 - JANがExcel側で数値として保存されていた場合、失われた先頭ゼロは復元できません。警告します。
 - ASINが無題列にある場合は、B0で始まる10桁だけを**候補**として扱い、確認を要求します。
+- 見積依頼・見積回答シートでは、見出しが空欄のASIN列や利益判定列を**5行以上の高一致率かつ80%以上の行網羅率**で推定できます。推定した列は `inferred_columns` と `summary.inferred_fields` に明示し、各行へ `ASIN_UNLABELED_COLUMN_INFERRED` / `PROFIT_UNLABELED_COLUMN_INFERRED` の警告を残します。候補列が複数ある場合や根拠が不足する場合は推定しません。原本の確定的な見出しとしては扱いません。利益ラベルはあくまで**原本の既存判定**であり、利益再計算や仕入承認ではありません。
 - **複数ASIN**が1セルにある場合、`asin_candidates`に全候補を残し、`asin_candidate`（単一候補欄）は空にします。単品／セットを選びません。
 - **卸側の商品名が空欄でAmazon名／ASINのみ**の行も失わず記録し、`SUPPLIER_PRODUCT_UNKNOWN`を付けます。
 - **メーカー別シート**は`source_group`にシート名を保持しますが、シート名を契約先・製造元の確定情報に読み替えません。
@@ -80,4 +81,4 @@ document-type は manufacturer_list / quote_request / quote_response / catalog /
 
 業務上の項目定義は非公開の amazon-business-knowledge/suppliers/field-schema.md を参照してください。公開リポジトリから直接参照・取得できるとは限りません。
 
-**実Google Sheetsとの照合（2026-11-08）**：`FORMATTED_VALUE` の返却値は数値JANも文字列として返すため、数値セルから先頭0が失われているか判定できません。`FORMULA` に変更して生の数値型を保持し、式は文字列として処理・不採用とします。実資料の金額・原文をGitHubに保存しないでください。なおGoogle Sheets APIでの再実行は未確認です。
+**実Google Sheetsとの照合（2026-11-08）**：`FORMATTED_VALUE` の返却値は数値JANも文字列として返すため、数値セルから先頭0が失われているか判定できません。`FORMULA` に変更して生の数値型を保持し、式は文字列として処理・不採用とします。実資料の金額・原文をGitHubに保存しないでください。その後、専用サービスアカウントによるGoogle Colabからの実接続と先頭40行の読み取り・集計（39件）は成功しました。ただし、列推定機能を含む更新後の実データ再検証は未実施です。
