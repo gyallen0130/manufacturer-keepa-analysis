@@ -245,6 +245,29 @@ class SupplierDocumentTests(unittest.TestCase):
         self.assertFalse(x['records'][0]['cost_present'])
         self.assertNotIn('cost_amount', x['records'][0])
 
+    def test_sheets_adapter_rejects_unbounded_or_large_reads(self):
+        api = Mock()
+        for value in ["'見積'!A:L", "'見積'!A1:L", "'見積'!A1:L0",
+                      "'見積'!L10:A1", "'見積'!A1:Z2001", "A1:B5", "'見積'!A0:B2"]:
+            with self.assertRaises(ValueError, msg=value):
+                sheets_values(api, spreadsheet_id='fake-id', sheet_range=value)
+        api.spreadsheets.assert_not_called()
+
+    def test_cli_summary_only_omits_business_values(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / 'sensitive.csv'
+            path.write_text('メーカー,商品名,JAN,ASIN,下代(税抜),取引条件\n'
+                            '架空卸社,秘密商品,0012345678901,B012345678,1234,ケース単位\n', encoding='utf-8')
+            cmd = [sys.executable, '-m', 'supplier_docs.cli', '--input', str(path),
+                   '--document-type', 'quote_response', '--summary-only']
+            run = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            out = json.loads(run.stdout)
+            self.assertEqual(out['summary']['record_count'], 1)
+            for secret in ['架空卸社', '秘密商品', '0012345678901', 'B012345678', '1234']:
+                self.assertNotIn(secret, run.stdout)
+            self.assertNotIn('records', out)
+            self.assertNotIn('source_file_id', out)
+
     def test_cli_default_redacted_and_exclusive_write(self):
         with tempfile.TemporaryDirectory() as d:
             file = Path(d) / 'sample.csv'
