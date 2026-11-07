@@ -172,6 +172,58 @@ def _profit_label(label):
     return 'conditional_or_unclassified' if any(x in t for x in ('黒字', '赤字', '利益')) else 'unknown'
 
 
+
+def _infer_unlabeled_columns(raw, header_index, mapping, document_type):
+    """Infer only high-consensus, *unlabeled* ASIN/profit columns in quote sheets.
+
+    This is structural inference, NOT ASIN verification or a profitability decision.
+    Low-sample, sparse, mixed or competing columns remain unmapped. All inferred
+    values must be flagged for source review.
+    """
+    if document_type not in ('quote_request', 'quote_response'):
+        return {}, []
+    header = raw[header_index]
+    sample = []
+    for row in raw[header_index + 1:]:
+        if (_read_column(row, mapping, 'product_name_raw') or
+                _read_column(row, mapping, 'amazon_name')):
+            sample.append(row)
+            if len(sample) == 100:
+                break
+    if len(sample) < 5:
+        return {}, []
+    used = set(mapping.values())
+    inferred, ambiguity = {}, []
+    max_columns = min(200, max([len(header)] + [len(row) for row in sample]))
+    tests = (
+        ('asin', lambda text: bool(ASIN.fullmatch(text.upper()))),
+        ('source_profit_label', lambda text: bool(
+            re.match(r'^(?:微黒字|黒字|赤字)(?=$|[\\s(・/／:：])', text))),
+    )
+    for field, matches in tests:
+        if field in mapping:
+            continue
+        candidates = []
+        for col in range(max_columns):
+            if col in used or (col < len(header) and _text(header[col])):
+                continue
+            values = [row[col] for row in sample if col < len(row)
+                      and isinstance(row[col], str) and _text(row[col])]
+            # A candidate must cover most product rows, not just a small
+            # nonempty subsection. Formula-like strings cannot qualify.
+            count = sum(bool(not value.lstrip().startswith('=') and matches(_text(value)))
+                        for value in values)
+            if (count >= 5 and count * 10 >= len(values) * 9
+                    and count * 10 >= len(sample) * 8):
+                candidates.append(col)
+        if len(candidates) == 1:
+            inferred[field] = candidates[0]
+            used.add(candidates[0])
+        elif len(candidates) > 1:
+            ambiguity.append(field)
+    return inferred, ambiguity
+
+
 def _tax_mode(header):
     h = normalize_header(header)
     if '税込' in h:
@@ -214,8 +266,14 @@ def parse_rows(rows, *, document_type, source_file_id='', source_url='', source_
     if best is None:
         raise ValueError('no reliable header: select document type or header_row')
     _, hidx, mapping, ambiguous = best
+    inferred, inferred_ambiguous = _infer_unlabeled_columns(
+        raw, hidx, mapping, document_type)
+    mapping = {**mapping, **inferred}
     head = raw[hidx]
     records, warnings = [], []
+    if inferred_ambiguous:
+        warnings.append({'row': hidx + 1, 'codes': ['AMBIGUOUS_INFERRED_COLUMNS'],
+                         'fields': inferred_ambiguous})
     if ambiguous:
         warnings.append({'row': hidx + 1, 'codes': ['AMBIGUOUS_COLUMNS'], 'fields': ambiguous})
     inherited_maker = ''
@@ -258,6 +316,8 @@ def parse_rows(rows, *, document_type, source_file_id='', source_url='', source_
         asin_value = row[asin_ix] if asin_ix is not None and asin_ix < len(row) else None
         asins, asin_errors = _asin_candidates(asin_value)
         errors.extend(asin_errors)
+        if asins and 'asin' in inferred:
+            errors.append('ASIN_UNLABELED_COLUMN_INFERRED')
         if not asins and 'asin' not in mapping:
             # For unnamed columns, accept one plausible *candidate* but never call it matched.
             candidates = []
@@ -296,6 +356,8 @@ def parse_rows(rows, *, document_type, source_file_id='', source_url='', source_
             if tax == 'unknown':
                 risks.add('TAX_UNKNOWN')
         label = _read_column(row, mapping, 'source_profit_label')
+        if label and 'source_profit_label' in inferred:
+            errors.append('PROFIT_UNLABELED_COLUMN_INFERRED')
         if not label:
             # An unlabeled profit comment may be present; no automatic interpretation.
             unlabeled = [str(c) for i, c in enumerate(row) if i not in mapping.values()
@@ -341,9 +403,11 @@ def parse_rows(rows, *, document_type, source_file_id='', source_url='', source_
         'source_url': source_url,
         'source_sheet': source_sheet,
         'header_row': hidx + 1,
-        'mapped_columns': {key: i + 1 for key, i in mapping.items()},
+        'mapped_columns': {key: i + 1 for key, i in mapping.items() if key not in inferred},
+        'inferred_columns': {key: i + 1 for key, i in inferred.items()},
         'summary': {'record_count': len(records), 'risk_counts': dict(sorted(counts.items())),
-                    'warning_count': len(warnings)},
+                    'warning_count': len(warnings),
+                    'inferred_fields': sorted(inferred)},
         'warnings': warnings,
         'records': records,
     }
