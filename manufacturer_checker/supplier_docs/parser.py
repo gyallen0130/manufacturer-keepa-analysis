@@ -27,7 +27,9 @@ ALIASES = {
     'cost_amount': ('下代(税抜)', '下代(税込)', '下代',
                     '卸値(税抜)', '卸値(税込)', '卸値', '仕入価格', '仕入単価'),
     'source_profit_label': ('利益', '利益区分', '利益判定', '仕入判定'),
-    'notes': ('備考', '取引条件', '販売制限', '条件', '注文条件'),
+    'notes': ('備考', '販売制限', '注意事項'),
+    'trade_terms': ('取引条件', '注文条件', '支払条件'),
+    'trade_marker': ('取引', '取引可否'),
     'revision_before': ('変更前価格(税抜)', '変更前価格(税込)'),
     'revision_after': ('変更後価格(税抜)', '変更後価格(税込)'),
 }
@@ -37,6 +39,7 @@ RISKS = {
     'SUPPLY_RESTRICTION': re.compile(r'(?:取扱[い]?不可|取り扱い不可|美容ルート限定|直送(?:対応)?のみ|取扱対象外)'),
     'PRICE_POLICY_NOTE': re.compile(r'(?:定価販売|価格(?:厳守|維持)|売価(?:厳守|維持))'),
     'LOT_CONDITION': re.compile(r'(?:ケース単位|ロット(?:単位|発注)|[0-9０-９]+ケース以上)'),
+    'MIN_ORDER_CONDITION': re.compile(r'(?:[0-9０-９,，]+\s*(?:円|ケース)\s*(?:\([^)]*\))?\s*以上)'),
 }
 ASIN = re.compile(r'^[A-Z0-9]{10}$')
 JAN = re.compile(r'^[0-9]{8,14}$')
@@ -111,11 +114,34 @@ def _identifier(value, *, kind):
         t = _text(value)
     if isinstance(value, str) and t.lstrip().startswith('='):
         return '', f'{kind}_FORMULA'
-    t = re.sub(r'[\s\-]', '', t).upper()
+    invisible = any(ch in t for ch in ('\u200b', '\u2060', '\ufeff'))
+    t = re.sub(r'[\s\-\u200b\u2060\ufeff]', '', t).upper()
     valid = JAN if kind == 'JAN' else ASIN
     if not valid.fullmatch(t):
         return '', f'{kind}_INVALID'
+    if invisible and kind == 'JAN':
+        return t, 'JAN_INVISIBLE_CHARACTER'
     return t, f'{kind}_NUMERIC_CELL' if numeric_cell and kind == 'JAN' else None
+
+
+def _asin_candidates(value):
+    """Preserve every distinct candidate; never pick a single ASIN from a multi-cell."""
+    if value in ('', None):
+        return [], []
+    if not isinstance(value, str):
+        return [], ['ASIN_INVALID']
+    if value.lstrip().startswith('='):
+        return [], ['ASIN_FORMULA']
+    raw = _text(value).upper()
+    parts = [part for part in re.split(r'[\s,，;；、]+', raw) if part]
+    good = list(dict.fromkeys(part for part in parts if ASIN.fullmatch(part)))
+    invalid = any(not ASIN.fullmatch(part) for part in parts)
+    errors = []
+    if invalid:
+        errors.append('ASIN_PARTIALLY_INVALID' if good else 'ASIN_INVALID')
+    if len(good) > 1:
+        errors.append('ASIN_MULTIPLE_CANDIDATES')
+    return good, errors
 
 
 def _amount(value):
@@ -193,20 +219,30 @@ def parse_rows(rows, *, document_type, source_file_id='', source_url='', source_
     if ambiguous:
         warnings.append({'row': hidx + 1, 'codes': ['AMBIGUOUS_COLUMNS'], 'fields': ambiguous})
     inherited_maker = ''
+    inherited_terms = ''
     for physical_index, row in enumerate(raw[hidx + 1:], hidx + 2):
         if not any(_text(cell) for cell in row):
             inherited_maker = ''  # Do not inherit a company through a blank section.
+            inherited_terms = ''
             continue
         maker = _read_column(row, mapping, 'manufacturer_name_raw')
         if maker:
             inherited_maker = maker
+            inherited_terms = ''  # Terms must not leak across supplier groups.
         elif document_type not in ('manufacturer_list', 'price_revision'):
             maker = inherited_maker
+        trade_terms = _read_column(row, mapping, 'trade_terms')
+        if trade_terms:
+            inherited_terms = trade_terms
+        elif document_type not in ('manufacturer_list', 'price_revision'):
+            trade_terms = inherited_terms
         product = _read_column(row, mapping, 'product_name_raw')
+        amazon_product = _read_column(row, mapping, 'amazon_name')
         if document_type == 'manufacturer_list':
             if not maker:
                 continue
-        elif not (product or _read_column(row, mapping, 'jan_string')):
+        elif not (product or _read_column(row, mapping, 'jan_string') or amazon_product or
+                  _read_column(row, mapping, 'asin')):
             # A section title with only a supplier name is not a product record.
             continue
         errors = []
@@ -218,8 +254,11 @@ def parse_rows(rows, *, document_type, source_file_id='', source_url='', source_
                 errors.append(error)
             return result
         jan = idval('jan_string', 'JAN')
-        asin = idval('asin', 'ASIN')
-        if not asin and 'asin' not in mapping:
+        asin_ix = mapping.get('asin')
+        asin_value = row[asin_ix] if asin_ix is not None and asin_ix < len(row) else None
+        asins, asin_errors = _asin_candidates(asin_value)
+        errors.extend(asin_errors)
+        if not asins and 'asin' not in mapping:
             # For unnamed columns, accept one plausible *candidate* but never call it matched.
             candidates = []
             for i, cell in enumerate(row):
@@ -229,13 +268,21 @@ def parse_rows(rows, *, document_type, source_file_id='', source_url='', source_
                 if t.startswith('B0') and ASIN.fullmatch(t):
                     candidates.append(t)
             if len(set(candidates)) == 1 and candidates:
-                asin = candidates[0]
+                asins = [candidates[0]]
                 errors.append('ASIN_UNLABELED_CANDIDATE')
+        # A single-ASIN convenience field is deliberately blank for multi-ASIN rows.
+        asin = asins[0] if len(asins) == 1 else ''
         note = _read_column(row, mapping, 'notes')
         risk_text = ' | '.join(_text(x)[:1000] for x in row if isinstance(x, str))
+        if trade_terms:
+            risk_text += ' | ' + trade_terms[:2000]
         risks = {key for key, regex in RISKS.items() if regex.search(risk_text)}
-        if asin:
+        if asins:
             risks.add('ASIN_UNVERIFIED')
+        if len(asins) > 1:
+            risks.add('MULTIPLE_ASIN_CANDIDATES')
+        if not product and (amazon_product or asins):
+            risks.add('SUPPLIER_PRODUCT_UNKNOWN')
         cost_i = mapping.get('cost_amount')
         cost_value = row[cost_i] if cost_i is not None and cost_i < len(row) else None
         cost = _amount(cost_value)
@@ -272,6 +319,9 @@ def parse_rows(rows, *, document_type, source_file_id='', source_url='', source_
             'product_name_raw': product,
             'jan_string': jan,
             'asin_candidate': asin,
+            'asin_candidates': asins,
+            'source_group': source_sheet,  # Sheet label is not proof of manufacturer identity.
+            'trade_terms_present': bool(trade_terms),
             'order_multiple': unit,
             'cost_present': cost is not None,
             'cost_tax_mode': tax,
@@ -280,8 +330,8 @@ def parse_rows(rows, *, document_type, source_file_id='', source_url='', source_
             'decision': 'needs_confirmation',
         }
         if include_sensitive:
-            record.update(cost_amount=cost, notes=note, source_profit_label_raw=label,
-                          product_name_amazon=_read_column(row, mapping, 'amazon_name'))
+            record.update(cost_amount=cost, notes=note, trade_terms=trade_terms,
+                          source_profit_label_raw=label, product_name_amazon=amazon_product)
         records.append(record)
     counts = Counter(code for rec in records for code in rec['risk_codes'])
     return {
