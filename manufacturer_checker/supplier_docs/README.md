@@ -1,0 +1,52 @@
+# 取引先資料の共通解析（試験版）
+
+Google Driveのメーカー／卸問屋別フォルダにある見積書・商品リストの**表部分**を、出典・リスク付きの共通JSONに変換する試験版です。従来のKeepa分析・Colab実行・GitHub Actionsとは接続していません。
+
+**対象**：.xlsx / .xlsm / .csv / .tsv と、Google Sheets v4の values.get が返す2次元配列。PDF解析、Driveの全フォルダ巡回、定期同期、Keepa照合、利益再計算、発注は未実装です。
+
+## 使い方
+
+既存コードと独立したモジュールです。APIキー不要のローカルファイル解析：
+
+    cd manufacturer_checker
+    pip install -r requirements.txt
+    python -m supplier_docs.cli --input /path/to/quote.xlsx --sheet-name 見積もり --document-type quote_response
+
+Google Sheetsは、**認可済みで読み取り専用スコープを備えた**Google Application Default Credentials（ADC）がある場合のみ利用できます。
+
+    python -m supplier_docs.cli --sheets-id SHEET_ID --sheet-range "'見積もり'!A1:L300" --document-type quote_response
+
+ADCとSheets APIの有効化・対象ファイルの共有権限の準備が別途必要です。APIは spreadsheets.values.get のみを実行し、Drive内のファイルを変更しません。
+
+document-type は manufacturer_list / quote_request / quote_response / catalog / price_revision から**原本の性質を確認して**選択してください。見積依頼を回答済み見積として扱わないため、自動推定しません。見出し行は先頭20行から推定し、必要なら --header-row 2 を指定します。対象の表範囲は原本に合わせて狭く指定してください。
+
+## 出力と保護
+
+既定の標準出力は**原価と備考を伏せた**JSONです。元ファイルへの更新はしません。
+
+卸値などの詳細が必要な場合のみ、アクセス制限されたローカル保存先を指定します。
+
+    python -m supplier_docs.cli --input /path/to/quote.xlsx --document-type quote_response --include-sensitive --output /private/path/result.json
+
+保存先は新規ファイルのみ（既存ファイルは上書きしない）、Unix系では所有者のみのアクセス許可を指定します。OSの設定や保存先共有権限も別途確認してください。**実見積、原価、取引先の個人情報、出力したJSONをGitHubへコミットしないでください**。ファイルのパスや原本のURLにも取引情報が含まれる場合があります。
+
+出力には source_file_id / source_sheet / source_row、JAN（文字列）、ASIN候補（照合未確定）、発注単位、税区分、既存利益判定の状態、リスクコードを含みます。すべての行の decision は needs_confirmation で、仕入れの自動承認はしません。
+
+## 注意点
+
+- JANがExcel側で数値として保存されていた場合、失われた先頭ゼロは復元できません。警告します。
+- ASINが無題列にある場合は、B0で始まる10桁だけを**候補**として扱い、確認を要求します。
+- 見出しの同義列が重複した場合は片方を推測で選ばず、その項目の抽出を保留します。
+- 黒字（競合によっては赤字）等は条件付きと判断し、単純に黒字として採用しません。
+- EC不可・取り扱い不可・直送限定・定価販売等はリスクコードとして記録します。規制や契約上の実効性を判断する機能ではありません。
+- Google Sheetsの表示形式で失われたJANの0や数式の計算結果の検証は保証しません。
+- PDF、結合セルの特殊な配置、複数の独立した表を持つシート、Excelの外部リンク等は未対応です。原本を読んで手動確認してください。
+
+## テスト
+
+    cd manufacturer_checker
+    python -m unittest discover -s tests -p 'test_supplier_docs.py' -v
+
+テストはすべて架空データです。実際の取引先・仕入価格・Drive IDはコードに含めません。
+
+業務上の項目定義は非公開の amazon-business-knowledge/suppliers/field-schema.md を参照してください。公開リポジトリから直接参照・取得できるとは限りません。
