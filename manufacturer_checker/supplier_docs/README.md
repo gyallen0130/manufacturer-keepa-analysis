@@ -50,3 +50,5 @@ document-type は manufacturer_list / quote_request / quote_response / catalog /
 テストはすべて架空データです。実際の取引先・仕入価格・Drive IDはコードに含めません。
 
 業務上の項目定義は非公開の amazon-business-knowledge/suppliers/field-schema.md を参照してください。公開リポジトリから直接参照・取得できるとは限りません。
+
+**実Google Sheetsとの照合（2026-11-08）**：`FORMATTED_VALUE` の返却値は数値JANも文字列として返すため、数値セルから先頭0が失われているか判定できません。`FORMULA` に変更して生の数値型を保持し、式は文字列として処理・不採用とします。実資料の金額・原文をGitHubに保存しないでください。なおGoogle Sheets APIでの再実行は未確認です。
