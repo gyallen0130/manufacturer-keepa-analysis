@@ -20,6 +20,21 @@ ADCとSheets APIの有効化・対象ファイルの共有権限の準備が別�
 
 document-type は manufacturer_list / quote_request / quote_response / catalog / price_revision から**原本の性質を確認して**選択してください。見積依頼を回答済み見積として扱わないため、自動推定しません。見出し行は先頭20行から推定し、必要なら --header-row 2 を指定します。対象の表範囲は原本に合わせて狭く指定してください。
 
+## 安全なAPI接続の試運転
+
+実際のGoogle Sheetsへプログラムから接続するには、**別途** Google Application Default Credentials (ADC) と対象ファイルの読み取り権限が必要です。ChatGPTのGoogle Drive接続は、Pythonプログラムへ認証情報を提供しません。
+
+初回は少数セルの明示的な範囲（例：`'見積もり'!A1:L40`）を読み、詳細をログに出さない集計モードで確認してください。
+
+    python -m supplier_docs.cli --sheets-id YOUR_SHEET_ID --sheet-range "'見積もり'!A1:L40" --document-type quote_request --summary-only
+
+- Google Sheets APIの要求は `spreadsheets.values.get` だけで、`spreadsheets.readonly` スコープを要求します。
+- `--sheet-range` は行・列の両端を指定した有限のA1範囲のみ許可し、最大50,000セルです。列全体や全シートは拒否します。
+- `--summary-only` はレコード数、リスク・警告のコード別件数のみを出力し、メーカー名・商品名・JAN・ASIN・仕入値・ファイルIDを出しません。
+- `--include-sensitive` と `--summary-only` は併用できません。
+- 実際の会社の資料を読み取る場合は、必要な閲覧権限を持つ承認済みアカウントで実行し、個別情報をコンソール・CI・Public Issueに貼らないでください。
+- 本リポジトリの自動テストはAPI認証を使わない合成テストです。初回のGoogle実認証試験は**まだ行っていません**。
+
 ## 出力と保護
 
 既定の標準出力は**原価と備考を伏せた**JSONです。元ファイルへの更新はしません。
