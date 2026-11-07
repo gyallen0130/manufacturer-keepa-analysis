@@ -47,6 +47,46 @@ class SupplierDocumentTests(unittest.TestCase):
         self.assertTrue(r0['cost_present'])
         self.assertNotIn('cost_amount', r0)
 
+    def test_consensus_unlabeled_quote_columns_are_inferred_not_verified(self):
+        # Entirely synthetic data: blank headers for ASIN and source profit.
+        rows = [['メーカー', '商品名', '商品名（Amazon）', '', 'JAN', '下代（税抜）', '', '備考']]
+        statuses = ['黒字', '赤字', '微黒字', '黒字（競合状況で赤字）', '黒字', '赤字']
+        for i, status in enumerate(statuses, 1):
+            rows.append(['架空卸' if i == 1 else '', f'架空商品{i}', f'Amazon名{i}',
+                         f'B0{i:08d}', '', 100 + i, status, ''])
+        result = parse_rows(rows, document_type='quote_request')
+        self.assertEqual(result['inferred_columns'],
+                         {'asin': 4, 'source_profit_label': 7})
+        self.assertNotIn('asin', result['mapped_columns'])
+        self.assertEqual(result['summary']['inferred_fields'], ['asin', 'source_profit_label'])
+        self.assertEqual(result['records'][0]['asin_candidate'], 'B000000001')
+        self.assertEqual(result['records'][3]['source_profit_status'],
+                         'conditional_or_unclassified')
+        self.assertIn('ASIN_UNVERIFIED', result['records'][0]['risk_codes'])
+        self.assertTrue(all(rec['decision'] == 'needs_confirmation' for rec in result['records']))
+        codes = [code for w in result['warnings'] for code in w['codes']]
+        self.assertIn('ASIN_UNLABELED_COLUMN_INFERRED', codes)
+        self.assertIn('PROFIT_UNLABELED_COLUMN_INFERRED', codes)
+        self.assertNotIn('UNLABELED_PROFIT_TEXT', codes)
+        self.assertNotIn('cost_amount', result['records'][0])
+
+    def test_competing_unlabeled_asin_columns_remain_ambiguous(self):
+        rows = [['商品名', '', '']]
+        for i in range(1, 7):
+            rows.append([f'架空商品{i}', f'B0{i:08d}', f'B0{i+10:08d}'])
+        result = parse_rows(rows, document_type='quote_request')
+        self.assertNotIn('asin', result['inferred_columns'])
+        self.assertEqual(result['records'][0]['asin_candidates'], [])
+        self.assertIn('AMBIGUOUS_INFERRED_COLUMNS',
+                      result['warnings'][0]['codes'])
+
+    def test_sparse_unlabeled_profit_is_not_inferred(self):
+        rows = [['商品名', '']]
+        rows += [[f'架空商品{i}', '黒字' if i < 3 else ''] for i in range(1, 9)]
+        result = parse_rows(rows, document_type='quote_request')
+        self.assertNotIn('source_profit_label', result['inferred_columns'])
+        self.assertIn('UNLABELED_PROFIT_TEXT', result['warnings'][0]['codes'])
+
     def test_conditional_profit_text_not_black(self):
         rows = [
             ['メーカー', '商品名', '利益'],
