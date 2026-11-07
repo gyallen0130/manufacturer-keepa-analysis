@@ -36,7 +36,7 @@ def local_rows(path, *, sheet_name=None, encoding=None, max_file_bytes=20_000_00
 def sheets_values(service, *, spreadsheet_id, sheet_range):
     """Read only: caller supplies an authenticated Sheets v4 client and explicit A1 range.
 
-    FORMULA preserves numeric cell types and returns formulas as text.
+    FORMULA preserves raw numeric cell types and returns formulas as text.
     Never evaluate formula strings or infer lost leading zeros for numeric identifiers.
     """
     # Reject unbounded A:A / A1:A and overly broad scans before any API call.
