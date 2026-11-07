@@ -1,6 +1,7 @@
 """File and Sheets-value adapters; never write to source files or Drive."""
 import csv
 import io
+import re
 from pathlib import Path
 
 
@@ -38,8 +39,23 @@ def sheets_values(service, *, spreadsheet_id, sheet_range):
     FORMULA preserves numeric cell types and returns formulas as text.
     Never evaluate formula strings or infer lost leading zeros for numeric identifiers.
     """
-    if not spreadsheet_id or not sheet_range or '!' not in sheet_range:
-        raise ValueError('sheet id and a bounded sheet!A1 range are required')
+    # Reject unbounded A:A / A1:A and overly broad scans before any API call.
+    # Only a finite, explicit rectangular range is accepted here.
+    pat = r"^(?:'(?:[^']|'')+'|[^'!]+)![\$]?([A-Za-z]{1,3})[\$]?(\d+):[\$]?([A-Za-z]{1,3})[\$]?(\d+)$"
+    match = re.fullmatch(pat, str(sheet_range or ''))
+    if not spreadsheet_id or not match:
+        raise ValueError('sheet id and a finite sheet!A1:B100 range are required')
+    col1,row1,col2,row2 = match.groups()
+    def colnum(text):
+        out = 0
+        for ch in text.upper():
+            out = out * 26 + ord(ch) - ord('A') + 1
+        return out
+    start_col, end_col = colnum(col1), colnum(col2)
+    start_row, end_row = int(row1), int(row2)
+    if (start_row < 1 or end_row < start_row or start_col < 1
+            or end_col < start_col or (end_row - start_row + 1) * (end_col - start_col + 1) > 50000):
+        raise ValueError('range must be ordered, positive, and no more than 50000 cells')
     result = (service.spreadsheets().values().get(
         spreadsheetId=spreadsheet_id,
         range=sheet_range,
