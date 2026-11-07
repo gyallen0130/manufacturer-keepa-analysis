@@ -15,7 +15,7 @@ class SupplierAuthenticationTests(unittest.TestCase):
 
     def test_malformed_or_missing_target_rejected_before_adc(self):
         for value in (None, '', 'owner@gmail.com', 'not-an-email',
-                      'prod@example.iam.gserviceaccount.com',
+                      'prod@!.iam.gserviceaccount.com',
                       'badtarget@somewhere.example.com', 'mixed.Case@x-xxxx.iam.gserviceaccount.com'):
             with self.assertRaises(ValueError, msg=repr(value)):
                 build_readonly_sheets_service(value)
