@@ -52,7 +52,7 @@ document-type は manufacturer_list / quote_request / quote_response / catalog /
     cd manufacturer_checker
     python -m unittest discover -s tests -p 'test_supplier_docs.py' -v
 
-ワコーフーズとは異なる列順・複数ASIN・ケース条件を架空データで検証しています。テストはすべて架空データです。実際の取引先・仕入価格・Drive IDはコードに含めません。
+異なる列順・複数ASIN・ケース条件を架空データで検証しています。テストはすべて架空データです。実際の取引先・仕入価格・Drive IDはコードに含めません。
 
 業務上の項目定義は非公開の amazon-business-knowledge/suppliers/field-schema.md を参照してください。公開リポジトリから直接参照・取得できるとは限りません。
 
