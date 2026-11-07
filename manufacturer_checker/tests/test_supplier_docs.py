@@ -179,6 +179,72 @@ class SupplierDocumentTests(unittest.TestCase):
         api.spreadsheets.return_value.values.return_value.get.assert_called_once_with(
             spreadsheetId='fake-id', range="'架空'!A1:B4", valueRenderOption='FORMULA')
 
+    def test_multiple_asins_preserved_but_never_auto_selected(self):
+        rows = [
+            ['メーカー', '商品名', 'ASIN', 'JAN'],
+            ['架空社', '単品かセットか不明', 'B012345678\nB098765432\nB012345678', '0012345678901'],
+            ['', '確認待ち商品', 'B012345678\n不明コード', '0123456789012'],
+        ]
+        x = parse_rows(rows, document_type='quote_request')
+        r = x['records'][0]
+        self.assertEqual(r['asin_candidates'], ['B012345678', 'B098765432'])
+        self.assertEqual(r['asin_candidate'], '')
+        self.assertIn('MULTIPLE_ASIN_CANDIDATES', r['risk_codes'])
+        self.assertEqual(r['decision'], 'needs_confirmation')
+        self.assertEqual(x['records'][1]['asin_candidate'], 'B012345678')
+        self.assertIn('ASIN_PARTIALLY_INVALID', x['warnings'][1]['codes'])
+
+    def test_trade_terms_inherited_without_copying_confidential_text(self):
+        rows = [
+            ['メーカー', '取引条件', '商品名', 'ASIN'],
+            ['架空卸A', 'ケース単位・2ケース以上', '商品1', 'B012345678'],
+            ['', '', '商品2', 'B098765432'],
+            ['架空卸B', '', '商品3', 'B012345679'],
+            ['', '40,000円以上', '商品4', 'B012345670'],
+        ]
+        x = parse_rows(rows, document_type='quote_request')
+        a,b,c,d = x['records']
+        self.assertIn('LOT_CONDITION', a['risk_codes'])
+        self.assertIn('LOT_CONDITION', b['risk_codes'])
+        self.assertIn('MIN_ORDER_CONDITION', b['risk_codes'])
+        self.assertNotIn('LOT_CONDITION', c['risk_codes'])
+        self.assertIn('MIN_ORDER_CONDITION', d['risk_codes'])
+        self.assertTrue(b['trade_terms_present'])
+        self.assertNotIn('trade_terms', b)
+        self.assertEqual(x['records'][0]['manufacturer_name_raw'], '架空卸A')
+
+    def test_amazon_only_orphans_preserved_and_flagged(self):
+        rows = [
+            ['取引条件','商品名','備考','商品名（Amazon）','ASIN','JAN'],
+            ['', '', '', '架空Amazon候補', 'B012345678', None],
+            ['', '卸元商品名', '', 'Amazonタイトル', 'B098765432', None],
+        ]
+        x = parse_rows(rows, document_type='catalog', source_sheet='架空グループ')
+        self.assertEqual(x['summary']['record_count'], 2)
+        self.assertEqual(x['records'][0]['product_name_raw'], '')
+        self.assertIn('SUPPLIER_PRODUCT_UNKNOWN', x['records'][0]['risk_codes'])
+        self.assertNotIn('SUPPLIER_PRODUCT_UNKNOWN', x['records'][1]['risk_codes'])
+        self.assertEqual(x['records'][0]['source_group'], '架空グループ')
+        self.assertEqual(x['records'][0]['manufacturer_name_raw'], '')
+
+    def test_invisible_jan_char_can_be_detected_without_guessing(self):
+        x = parse_rows([
+            ['商品名', 'JAN'],
+            ['架空品', '\u200b0012345678901'],
+        ], document_type='catalog')
+        self.assertEqual(x['records'][0]['jan_string'], '0012345678901')
+        self.assertIn('JAN_INVISIBLE_CHARACTER', x['warnings'][0]['codes'])
+
+    def test_wholesale_and_tax_inclusive_cost_columns_stay_ambiguous(self):
+        rows = [
+            ['メーカー','商品名','卸値','卸値（税込）','ASIN'],
+            ['架空卸','架空商品',500,'=C2*1.08','B012345678'],
+        ]
+        x = parse_rows(rows, document_type='quote_request')
+        self.assertIn('AMBIGUOUS_COLUMNS', x['warnings'][0]['codes'])
+        self.assertFalse(x['records'][0]['cost_present'])
+        self.assertNotIn('cost_amount', x['records'][0])
+
     def test_cli_default_redacted_and_exclusive_write(self):
         with tempfile.TemporaryDirectory() as d:
             file = Path(d) / 'sample.csv'
