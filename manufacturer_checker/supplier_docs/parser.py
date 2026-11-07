@@ -88,7 +88,7 @@ def _read_column(row, mapping, key):
         return ''
     value = row[i]
     if isinstance(value, str) and value.lstrip().startswith('='):
-        return ''
+        return ''  # Never evaluate or propagate formulas as values.
     return _text(value)
 
 
@@ -185,7 +185,7 @@ def parse_rows(rows, *, document_type, source_file_id='', source_url='', source_
                header_row=None, max_rows=20000, include_sensitive=False):
     """Parse a 2-D worksheet matrix into source-linked, redacted records.
 
-    header_row is 1-based, or auto-select within the first 20 physical rows.
+    `header_row` is 1-based, or auto-select within the first 20 physical rows.
     include_sensitive=True exposes raw purchase prices and notes in the returned data;
     callers MUST keep the output in approved private storage, never GitHub.
     """
