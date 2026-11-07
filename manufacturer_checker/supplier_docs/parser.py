@@ -198,7 +198,7 @@ def _infer_unlabeled_columns(raw, header_index, mapping, document_type):
     tests = (
         ('asin', lambda text: bool(ASIN.fullmatch(text.upper()))),
         ('source_profit_label', lambda text: bool(
-            re.match(r'^(?:微黒字|黒字|赤字)(?=$|[\\s(・/／:：])', text))),
+            re.match(r'^(?:微黒字|黒字|赤字)(?=$|[\s(・/／:：])', text))),
     )
     for field, matches in tests:
         if field in mapping:
