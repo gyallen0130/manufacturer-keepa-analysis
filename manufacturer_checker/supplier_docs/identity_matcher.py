@@ -40,6 +40,36 @@ def _gtin(value):
     return raw if checksum == numbers[-1] else ''
 
 
+_JAN_HEADER_ALIASES = frozenset({
+    'jan', 'janコード', 'janean', 'ean', 'eanコード', 'バーコード',
+})
+
+
+def mark_duplicate_jan_headers(records, header):
+    """Copy records and mark ambiguous JAN provenance from an original header.
+
+    An existing parser may already have selected a single JAN column or
+    omitted it due to ambiguity. This helper NEVER selects a column or fills
+    an absent JAN; it only attaches a review flag.
+    """
+    if (not isinstance(header, (list, tuple))
+            or len(header) > 100
+            or not isinstance(records, (list, tuple))
+            or len(records) > MAX_RECORDS_PER_SIDE
+            or not all(isinstance(item, dict) for item in records)):
+        raise ValueError('invalid supplier header or records')
+    tokens = [
+        re.sub(r'[\\s_\\-・/()\\[\\]:：]+', '',
+               unicodedata.normalize('NFKC', str(cell or '')).casefold())
+        for cell in header
+    ]
+    unresolved = sum(token in _JAN_HEADER_ALIASES for token in tokens) > 1
+    return [
+        {**rec, 'jan_source_ambiguous': True} if unresolved else dict(rec)
+        for rec in records
+    ]
+
+
 def _asins(row):
     sources = [row.get('asin_candidate', ''), row.get('asin', '')]
     extra = row.get('asin_candidates', [])
