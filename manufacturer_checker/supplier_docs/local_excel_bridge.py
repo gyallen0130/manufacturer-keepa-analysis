@@ -19,6 +19,7 @@ from .multi_source_readonly import (
     validate_source_lookup,
 )
 from .parser import DOCUMENT_TYPES
+from .tiered_header_mapping import validate_tiered_mapping_schema
 
 SCHEMA_VERSION = 'manual-local-excel-v1'
 MODE = 'manual_local_excel_readonly'
@@ -29,6 +30,7 @@ MAX_ROWS = 40
 MAX_COLS = 15
 _TARGET_KEYS = frozenset({
     'relative_path', 'sheet_name', 'document_type', 'header_row',
+    'tiered_mapping',
 })
 _SHEET = re.compile(r'^[^\x00-\x1f]{1,100}$')
 _ALLOWED_SUFFIXES = frozenset(('.xlsx', '.xlsm'))
@@ -69,8 +71,13 @@ def validate_excel_manifest(manifest):
         identifier = (str(path), sheet)
         if identifier in selected:
             raise ValueError('duplicate workbook tab selection')
+        tiered_mapping = target.get('tiered_mapping')
+        if tiered_mapping is not None:
+            validate_tiered_mapping_schema(tiered_mapping)
+            if header is not None:
+                raise ValueError('cannot mix single header with tiered mapping')
         selected.add(identifier)
-        checked.append((path, sheet, kind, header))
+        checked.append((path, sheet, kind, header, tiered_mapping))
     return checked
 
 
@@ -93,7 +100,7 @@ def inspect_selected_local_excel(*, root_dir, manifest, search=None):
     root_resolved = root.resolve(strict=True)
     paths = []
     total_bytes = 0
-    for relative, tab, kind, header in selected:
+    for relative, tab, kind, header, tiered_mapping in selected:
         child = root / relative
         if child.is_symlink():
             raise ValueError('selected file cannot be a symlink')
@@ -105,7 +112,7 @@ def inspect_selected_local_excel(*, root_dir, manifest, search=None):
         if (size > MAX_FILE_BYTES or total_bytes > MAX_TOTAL_BYTES
                 or not zipfile.is_zipfile(path)):
             raise ValueError('invalid or oversized Excel workbook')
-        paths.append((path, relative, tab, kind, header))
+        paths.append((path, relative, tab, kind, header, tiered_mapping))
 
     from openpyxl import load_workbook
 
@@ -117,7 +124,7 @@ def inspect_selected_local_excel(*, root_dir, manifest, search=None):
         opened = {}
         # Open and validate EVERY target tab first. No cell values are read
         # if any workbook is invalid, hidden or missing a selected worksheet.
-        for path, relative, tab, kind, header in paths:
+        for path, relative, tab, kind, header, tiered_mapping in paths:
             if path not in opened:
                 wb = load_workbook(
                     path, read_only=True, data_only=False, keep_links=False)
@@ -150,6 +157,7 @@ def inspect_selected_local_excel(*, root_dir, manifest, search=None):
                 'source_sheet': tab,
                 'document_type': kind,
                 'header_row': header,
+                'tiered_mapping': tiered_mapping,
                 'rows': rows,
             })
             origins.append({
