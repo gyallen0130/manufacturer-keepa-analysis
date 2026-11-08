@@ -58,6 +58,7 @@ def inspect_header_layout(rows):
             or any(not isinstance(row, (list, tuple))
                    or len(row) > MAX_HEADER_COLS for row in rows)):
         raise ValueError('header preflight requires at most 40x15 cells')
+    matches = []  # Empty workbooks must not have a synthetic header.
     candidates = []
     for physical_row, row in enumerate(rows, 1):
         types = [(_type(cell), index) for index, cell in enumerate(row)]
