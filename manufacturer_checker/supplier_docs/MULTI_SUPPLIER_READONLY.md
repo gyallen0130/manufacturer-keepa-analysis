@@ -137,6 +137,27 @@ approved = {
 
 [4卸問屋の構造を模した架空Excel4ファイルによる14件の回帰テスト](../tests/test_supplier_local_excel_bridge.py)を用意（1ファイルはマクロ有効形式の拡張子`.xlsm`）。ファイル実データや契約秘密をCIに持ち込まず、**実取引先のExcelについてはファイル形式／シート構造の確認まで**である。新ブリッジによる実原本行の正規化結果はまだ未検証。[実フォルダ・形式の匿名確認記録](https://github.com/gyallen0130/amazon-business-knowledge/blob/main/suppliers/pilots/four-supplier-excel-bridge-2026-11-08.md)。
 
+## 実Excelで発見した複数行の見出しと共通ガード（2026-11-08）
+
+Driveから読取許可された**4取引先・4つのExcelファイル・合計7シート**を一時的な私的処理環境で調査した。検証は**実ファイルの列構造**であり、新Python`local_excel_bridge`に個別仕入価格等を投入した本番実行ではない。
+
+- **イトウ**：見積回答Excelの3行目に「商品名／JAN／ASIN／JAN／ケース入数／単価」。**JAN見出しが重複**。依頼側JANと回答側JANの来歴を別資料で確認済みだが、商品同一性は確定しない。
+- **リードオフジャパン**：2シートとも**12～15行目に階層見出し**。商品コード、商品名・POS/ITFコード、入数、価格等が**複数行に分かれる**。**単一行として価格・入数・JANを誤結合しない**。
+- **井上**：対象Excel内の2シートで見出しが1行目。1シートには品番／JAN／商品名／発注単位／下代（税抜）などがある。
+- **ブラックス**：一次選別シートは**16行目**、別シートは**1行目**に商品列の見出し。卸値税抜／卸値税込など価格候補が併存し、**概算利益や定価を仕入原価として採用しない**。
+
+[`header_layout_guard.py`](header_layout_guard.py)を追加し、最大40行×15列の**既に取得した行配列**から、
+`single_row`／`multi_row_needs_review`／`no_reliable_header`／`empty` を判定する。
+`single_row`は見出しの物理行番号を返す。
+`multi_row_needs_review`は**複数行の見出しを勝手に1行へ統合せず**、共通解析で`needs_review`に分離する。他の資料の検索は続ける。
+JANの重複・価格らしい見出しの複数存在を匿名件数として記録するが、価格の正本選択・出品SKU確定・利益計算はしない。
+
+`multi_source_readonly.normalize_selected_sources`にこの事前判定を追加したので、**Sheets用／Excel用のどちらの入口でも同じ判定ルール**を使う。
+`public_summary`は`header_layout_counts`、`sources_with_duplicate_jan_headers`、`sources_with_multiple_price_hints`の**匿名集計のみ**を返す。
+実JAN・ASIN・卸原価・商品名は公開しない。
+
+[4社に由来する見出し形式のみを架空行列にしたテスト](../tests/test_supplier_header_layout_guard.py)を追加。ソース内容の実際の全商品行をGitHubへ送っていない。[機密を除いた4社の原本確認記録](https://github.com/gyallen0130/amazon-business-knowledge/blob/main/suppliers/pilots/four-supplier-real-excel-header-geometry-2026-11-08.md)。
+
 ## CIと実運用の線引き
 
 2026-11-08に調べた4社の**列見出し構造を模した架空の商品データ**を[15件のテスト](../tests/test_supplier_multi_source_readonly.py)で正規化・照会する。実JAN/価格・取引先の個別商品をCIへ渡さない。結果は正規化できる形のソフトウェア上の実証であり、**実際の4社の全商品行をプログラムに投入する一連の実運用試験ではない**。
