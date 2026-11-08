@@ -206,6 +206,14 @@ class OwnerVaultTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             self.export(output_path=symlink)
 
+    def test_never_decrypt_or_export_inside_git_working_tree(self):
+        (self.root / '.git').mkdir()
+        with self.assertRaises(PermissionError):
+            self.read()
+        with self.assertRaises(PermissionError):
+            self.export()
+        self.assertFalse(self.output.exists())
+
     def test_short_or_identical_passphrase_rejected_before_new_file(self):
         for pw in ('short', 'bad\x00long passphrase 1234'):
             dest = self.private_dir / 'new-vault.vault'
