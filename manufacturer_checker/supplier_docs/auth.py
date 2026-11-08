@@ -67,3 +67,22 @@ def build_readonly_drive_metadata_service(service_account_email, *,
         lifetime=900,
     )
     return build('drive', 'v3', credentials=delegated, cache_discovery=False)
+
+
+def build_readonly_sheets_service_from_wif_adc():
+    """Use ONLY the OAuth scope requested for a trusted PRIVATE GitHub WIF job.
+
+    A separately reviewed GitHub WIF provider must restrict the immutable
+    repository ID, ref, workflow_ref and event to manual dispatch. This client
+    builder does NOT verify Google IAM or source-credential identity by itself.
+
+    Unlike the Colab flow, the Github auth action directly impersonates the
+    dedicated Reader SA. No second SA/token-creator grant is required here.
+    The Reader must have Viewer access to approved Sheets only.
+    """
+    import google.auth
+    from googleapiclient.discovery import build
+
+    credentials, _ = google.auth.default(scopes=[SHEETS_READONLY_SCOPE])
+    return build('sheets', 'v4', credentials=credentials,
+                 cache_discovery=False)
