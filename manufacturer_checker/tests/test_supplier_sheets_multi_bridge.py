@@ -39,7 +39,7 @@ class SheetsFake:
             ],
             IDS[1]: [
                 ['', '商品名', '', '商品名（Amazon）', 'ASIN',
-                 'JAN', '', '発注単位', '卸値（税込）'],
+                 'JAN', '卸値', '発注単位', '卸値（税込）'],
                 ['', '架空ゼラチンA', '', '架空ゼラチンA', ASIN_A,
                  JAN_A, '', '6個', 540],
             ],
@@ -206,7 +206,7 @@ class SheetsMultiBridgeTests(unittest.TestCase):
     def test_search_record_scope_is_selected_not_all_folders(self):
         res = inspect_selected_google_sheets(
             SheetsFake(), manifest=approved(),
-            search={'field': 'product', 'query': '架空'})
+            search={'field': 'product', 'query': '架空マスク'})
         self.assertEqual(res['public_search_summary']['sources_searched'], 4)
         self.assertFalse(
             res['public_search_summary']['all_supplier_folders_searched'])
@@ -216,6 +216,16 @@ class SheetsMultiBridgeTests(unittest.TestCase):
         pub = json.dumps(res['public_summary'])
         for file_id in IDS:
             self.assertNotIn(file_id, pub)
+
+    def test_realistic_duplicate_wako_cost_headers_report_ambiguity(self):
+        result = inspect_selected_google_sheets(SheetsFake(), manifest=approved())
+        self.assertEqual(result['public_summary']
+                         ['ambiguous_field_source_counts'], {'cost_amount': 1})
+        record = result['private_normalized_docs'][1]['records'][0]
+        self.assertFalse(record['cost_present'])
+        self.assertEqual(record['cost_tax_mode'], 'unknown')
+        self.assertFalse(result['public_summary']['profit_calculation_allowed'])
+
 
 
 if __name__ == '__main__':
