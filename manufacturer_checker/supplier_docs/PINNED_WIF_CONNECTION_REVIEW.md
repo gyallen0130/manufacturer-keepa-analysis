@@ -4,7 +4,7 @@
 
 ## 実地で確認できた点（2026-11-08）
 
-- Google Drive上の**株式会社井上**と**ワコーフーズ**の既存Google Sheetsは、ChatGPTに連携されたDriveからメタデータを閲覧できる。指定Sheetのタブは表示可能。
+- Google Drive上の既存の**2件のGoogle Sheets**は、ChatGPTに連携されたDriveからメタデータを閲覧できる。指定Sheetのタブは表示可能。
 - 2ファイルとも、Driveの共有権限に**既存の専用 `supplier-docs-reader@...` サービスアカウントの`reader`権限**を確認した。ここで実際のサービスアカウントの完全なメールアドレス／ファイルIDを公開リポジトリへ書かない。
 - これは**ChatGPT側のGoogle Drive接続**による確認であり、**Private GitHub Actions→Google WIF→Reader SAでのアクセストークン取得を証明していない**。
 - 既存Private Repoの`main`はGitHub Branch API上は`protected: false`。Freeでルールセット保護を使えないことを踏まえ、**Google認証元をより厳しく固定する案**を加えた。実GCP IAMとGitHub Actions課金残量は未取得。
