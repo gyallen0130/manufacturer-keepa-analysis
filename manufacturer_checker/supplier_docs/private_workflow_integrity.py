@@ -1,8 +1,8 @@
 """Conservative no-network checks for the INACTIVE private WIF workflow example.
 
 Approval preflight, not a full YAML security parser. It only recognizes a
-reviewed template structure. The current example is NOT ready until Python
-dependency hashes and real private repo, IAM and billing reviews are complete.
+reviewed template structure. The Python wheel hashes are now checked, but
+real private repo, code trust, IAM and billing reviews remain mandatory.
 
 No credentials, GitHub API, cloud API, purchases or workflow dispatch.
 """
