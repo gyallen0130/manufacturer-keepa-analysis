@@ -257,5 +257,111 @@ def valid_env():
     }
 
 
+
+class PrivateEncryptedManualRunnerTests(unittest.TestCase):
+    """Synthetic end-to-end WIF-runner flow, no actual Google or GitHub auth."""
+
+    def setUp(self):
+        import tempfile
+        from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+        from supplier_docs.private_result_envelope import recipient_public_key_b64
+        from supplier_docs.private_result_file import FILENAME
+        import base64
+        import hashlib
+        from pathlib import Path
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.private = X25519PrivateKey.generate()
+        self.key_b64 = recipient_public_key_b64(self.private)
+        self.pin = hashlib.sha256(base64.b64decode(self.key_b64)).hexdigest()
+        self.artifact = Path(self.temp.name, FILENAME)
+
+    def env(self, **kw):
+        source = valid_env()
+        source.update({
+            'SUPPLIER_PRIVATE_RESULT_MODE': 'owner_encrypted_artifact',
+            'SUPPLIER_RECIPIENT_PUBLIC_KEY_B64': self.key_b64,
+            'SUPPLIER_RECIPIENT_KEY_FINGERPRINT_SHA256': self.pin,
+            'RUNNER_TEMP': self.temp.name,
+        })
+        source.update(kw)
+        return source
+
+    def test_success_encrypts_supplier_prices_no_plaintext_logs(self):
+        from supplier_docs.private_result_envelope import open_private_inspections
+        output, errors = io.StringIO(), io.StringIO()
+        code = main(environ=self.env(), service_factory=FakeSheets,
+                    stdout=output, stderr=errors)
+        self.assertEqual(code, 0)
+        self.assertEqual(errors.getvalue(), '')
+        self.assertEqual(json.loads(output.getvalue())['normalized_records'], 1)
+        artifact_content = self.artifact.read_bytes()
+        for secret in (FILE1, TAB, SENSITIVE_VENDOR, SENSITIVE_NAME,
+                       SENSITIVE_PRICE, SENSITIVE_JAN, SENSITIVE_ASIN):
+            for target in (artifact_content, output.getvalue().encode()):
+                self.assertNotIn(secret.encode(), target)
+        report = open_private_inspections(
+            json.loads(artifact_content),
+            recipient_private_key=self.private,
+            trusted_fingerprint_sha256=self.pin)
+        record = report['private_inspections'][0]['tabs'][0]['records'][0]
+        self.assertEqual(record['cost_amount'], SENSITIVE_PRICE)
+        self.assertEqual(record['jan_string'], SENSITIVE_JAN)
+        self.assertEqual(record['asin_candidate'], SENSITIVE_ASIN)
+
+    def test_wrong_public_key_pin_denied_before_api(self):
+        calls = []
+        stdout, stderr = io.StringIO(), io.StringIO()
+        result = main(
+            environ=self.env(SUPPLIER_RECIPIENT_KEY_FINGERPRINT_SHA256='0'*64),
+            service_factory=lambda: calls.append(True),
+            stdout=stdout, stderr=stderr)
+        self.assertEqual(result, 1)
+        self.assertEqual(calls, [])
+        self.assertFalse(self.artifact.exists())
+        self.assertEqual(stdout.getvalue(), '')
+
+    def test_missing_artifact_directory_denied_before_api(self):
+        calls = []
+        result = main(
+            environ=self.env(RUNNER_TEMP=''),
+            service_factory=lambda: calls.append(True),
+            stdout=io.StringIO(), stderr=io.StringIO())
+        self.assertEqual(result, 1)
+        self.assertEqual(calls, [])
+        self.assertFalse(self.artifact.exists())
+
+    def test_bad_mode_cannot_fall_back_to_unencrypted_details(self):
+        calls = []
+        code = main(
+            environ=self.env(SUPPLIER_PRIVATE_RESULT_MODE='plaintext'),
+            service_factory=lambda: calls.append(True),
+            stdout=io.StringIO(), stderr=io.StringIO())
+        self.assertEqual(code, 1)
+        self.assertEqual(calls, [])
+        self.assertFalse(self.artifact.exists())
+
+    def test_existing_encrypted_result_not_overwritten_or_logged(self):
+        from supplier_docs.private_result_file import FILENAME
+        self.artifact.write_bytes(b'previous private ciphertext')
+        stdout, stderr = io.StringIO(), io.StringIO()
+        result = main(environ=self.env(), service_factory=FakeSheets,
+                      stdout=stdout, stderr=stderr)
+        self.assertEqual(result, 1)
+        self.assertEqual(self.artifact.read_bytes(), b'previous private ciphertext')
+        self.assertEqual(stdout.getvalue(), '')
+        self.assertNotIn(FILE1, stderr.getvalue())
+
+    def test_public_pr_runner_never_produces_artifact(self):
+        calls = []
+        code = main(
+            environ=self.env(GITHUB_EVENT_NAME='pull_request'),
+            service_factory=lambda: calls.append(True),
+            stdout=io.StringIO(), stderr=io.StringIO())
+        self.assertEqual(code, 1)
+        self.assertEqual(calls, [])
+        self.assertFalse(self.artifact.exists())
+
+
 if __name__ == '__main__':
     unittest.main()
