@@ -101,6 +101,42 @@ approved_private = {
 
 `multi_source_readonly.normalize_selected_sources`は**あらかじめ指定された一部資料が空、または見出しを検出できなかった場合**でもほかの資料を処理し、`source_status_counts`（`parsed`、`empty`、`needs_review`）を匿名で返すよう改修した。検索時も`sources_with_parsed_headers`／`sources_not_searchable`を区別し、0件ヒットから「商品なし」と判断しない。予期しないパーサーエラーは隠さず停止する。架空の失敗・正常を混ぜた**4件のテストを追加**。
 
+## Excel .xlsx / .xlsmの共通解析用ローカル接続（2026-11-08追加）
+
+新しい[`local_excel_bridge.py`](local_excel_bridge.py)は、**利用者が権限を確認してプライベートなローカルフォルダへ置いたExcel**に限定し、Sheetsと同じ`normalize_selected_sources`および`search_selected_sources`へ渡す。ネットワーク・Google Drive・GitHubの認証を要求しない。勝手なフォルダ全走査、元ファイルの更新、マクロ/数式の実行、利益計算や自動発注はしない。
+
+```python
+from supplier_docs.local_excel_bridge import (
+    SCHEMA_VERSION, MODE, inspect_selected_local_excel,
+)
+
+# 架空のローカルフォルダとファイル名。実ファイルの内容は公開しない。
+approved = {
+    'schema_version': SCHEMA_VERSION,
+    'mode': MODE,
+    'targets': [
+        {'relative_path': 'vendor_a.xlsx', 'sheet_name': '見積もり',
+         'document_type': 'quote_response'},
+        {'relative_path': 'vendor_b.xlsm', 'sheet_name': '最終候補',
+         'document_type': 'quote_response'},
+    ],
+}
+# private_result = inspect_selected_local_excel(
+#     root_dir='/private/authorized-supplier-files', manifest=approved,
+#     search={'field': 'model', 'query': 'MODEL-001'},
+# )
+# print(private_result['public_summary'])  # 件数だけ
+# 商品の値・ファイルパス・検索ヒットは PRIVATE なので共有ログに出さない。
+```
+
+**入力制限と安全確認**：対象を明示した1～5タブのみ、1シートA1:O40（600セル）、計最大3000セル。1ファイル20MB・指定ファイル合計50MBまで。対象ファイルは指定したルート内の相対パスに限定し、`..`、絶対パス、シンボリックリンク、未知拡張子、隠しタブ、存在しないシートを拒否する。各シートの存在・可視性を検証してからセルを読む。
+
+`openpyxl.load_workbook(read_only=True, data_only=False, keep_links=False)`を使用。**.xlsmを読み取ってもVBAマクロを実行しない**。数式は評価済みの値でなく式文字列のまま読み、既存パーサーが仕入価格として推定計算しない。商品の**数値型JANも勝手に先頭0を復元しない**。
+
+ログに出せる`public_summary`は読んだ資料数・抽出件数・見出し曖昧性・数式数のみ。**PRIVATE**の`private_normalized_docs`・`private_origin_manifest`・`private_hits`は原本ファイル名・商品名・JAN・ASIN等を含み得るので、GitHub・公開CI・一般ログへ出さない。
+
+[4卸問屋の構造を模した架空Excel4ファイルによる14件の回帰テスト](../tests/test_supplier_local_excel_bridge.py)を用意（1ファイルはマクロ有効形式の拡張子`.xlsm`）。ファイル実データや契約秘密をCIに持ち込まず、**実取引先のExcelについてはファイル形式／シート構造の確認まで**である。新ブリッジによる実原本行の正規化結果はまだ未検証。[実フォルダ・形式の匿名確認記録](https://github.com/gyallen0130/amazon-business-knowledge/blob/main/suppliers/pilots/four-supplier-excel-bridge-2026-11-08.md)。
+
 ## CIと実運用の線引き
 
 2026-11-08に調べた4社の**列見出し構造を模した架空の商品データ**を[15件のテスト](../tests/test_supplier_multi_source_readonly.py)で正規化・照会する。実JAN/価格・取引先の個別商品をCIへ渡さない。結果は正規化できる形のソフトウェア上の実証であり、**実際の4社の全商品行をプログラムに投入する一連の実運用試験ではない**。
