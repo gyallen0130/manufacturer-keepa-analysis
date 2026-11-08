@@ -2,7 +2,7 @@
 import json
 import unittest
 
-from supplier_docs.offer_pack_guard import evaluate_offer_pack_guard
+from supplier_docs.offer_pack_guard import evaluate_offer_pack_guard, mark_records_from_pack_guard
 
 
 def manufacturer_quote(**extra):
@@ -131,6 +131,50 @@ class OfferPackGuardTests(unittest.TestCase):
             self.assertNotIn(token, serialized)
         self.assertEqual(result['public_summary']['source_writes'], 0)
         self.assertEqual(result['public_summary']['api_calls'], 0)
+
+
+    def test_secondary_pack_discrepancy_downgrades_identity_match(self):
+        from supplier_docs.identity_matcher import compare_supplier_rows
+        fake = {'jan_string': '0000000000017',
+                'asin_candidate': 'B0TEST0001',
+                'product_name_raw': 'FAKE ITEM'}
+        # No valid JAN needed for this check: the pack-review provenance
+        # flag, not the raw barcode, must prevent a strong match.
+        guarded = mark_records_from_pack_guard(
+            [fake], evaluate_offer_pack_guard(
+                manufacturer_quote(inner_boxes_per_quoted_unit=1,
+                                   quote_unit_verified=True),
+                retailer_offer()))
+        self.assertTrue(guarded[0]['offer_pack_review_required'])
+        match = compare_supplier_rows([fake], guarded)
+        self.assertEqual(match['private_pairs'][0]['status'], 'id_candidate')
+        self.assertIn('offer_pack_unit_requires_review',
+                      match['private_pairs'][0]['evidence_codes'])
+
+    def test_source_rows_not_mutated_when_flagging_pack_review(self):
+        fake = {'asin_candidate': 'B0TEST0001', 'product_name_raw': 'FAKE'}
+        original = dict(fake)
+        guarded = mark_records_from_pack_guard(
+            [fake], evaluate_offer_pack_guard(manufacturer_quote(), retailer_offer()))
+        self.assertEqual(fake, original)
+        self.assertIsNot(fake, guarded[0])
+        self.assertTrue(guarded[0]['offer_pack_review_required'])
+
+    def test_verified_matching_count_does_not_force_false_pack_warning(self):
+        fake = {'asin_candidate': 'B0TEST0001'}
+        guarded = mark_records_from_pack_guard(
+            [fake], evaluate_offer_pack_guard(
+                manufacturer_quote(inner_boxes_per_quoted_unit=4,
+                                   quote_unit_verified=True),
+                retailer_offer(source='amazon_direct_verified')))
+        self.assertNotIn('offer_pack_review_required', guarded[0])
+
+    def test_invalid_guard_or_oversized_rows_rejected(self):
+        with self.assertRaises(ValueError):
+            mark_records_from_pack_guard([{}], {'public_summary': {'status': 'approved'}})
+        with self.assertRaises(ValueError):
+            mark_records_from_pack_guard([{}] * 201,
+                                         evaluate_offer_pack_guard(manufacturer_quote(), retailer_offer()))
 
 
 if __name__ == '__main__':
