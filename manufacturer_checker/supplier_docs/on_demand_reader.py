@@ -63,6 +63,7 @@ def validate_manual_sheet_manifest(manifest):
                     or not _TITLE.fullmatch(tab['title'])
                     or not tab['title'].strip()
                     or tab['title'] in titles
+                    or not isinstance(tab['document_type'], str)
                     or tab['document_type'] not in DOCUMENT_TYPES):
                 raise ValueError('invalid or duplicate explicitly approved tab')
             titles.add(tab['title'])
