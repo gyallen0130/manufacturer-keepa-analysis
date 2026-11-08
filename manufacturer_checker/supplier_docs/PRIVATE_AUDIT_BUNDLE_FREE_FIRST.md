@@ -39,7 +39,7 @@
 
 - https://docs.github.com/en/billing/reference/product-usage-included
 - https://docs.github.com/en/actions/concepts/billing-and-usage
-- https://docs.github.com/en/billing/using-budgets-to-control-spending
+- https://docs.github.com/en/billing/how-tos/set-up-budgets
 - https://docs.github.com/en/actions/concepts/security/secrets
 - https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments
 - https://docs.github.com/en/rest/repos/contents
