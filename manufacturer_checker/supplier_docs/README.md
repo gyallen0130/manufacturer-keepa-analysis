@@ -6,7 +6,7 @@ Google Driveのメーカー／卸問屋別フォルダにある見積書・商�
 
 ## 追加：複数原本の商品候補照合（オフライン試験版）
 
-新たに[`identity_matcher.py`](identity_matcher.py)を追加しました。既存[`parser.parse_rows`](parser.py)などから得た**2つの解析済みレコード列**を受け取り、JAN・ASIN・商品名、任意の型番・容量・入数を保守的に比較します。結果は`strong_candidate / id_candidate / name_only / conflict`などの**候補判定**であり、販売可能SKUの自動確定や仕入許可ではありません。多対多の一致は降格、矛盾は`conflict`として保持します。
+新たに[`identity_matcher.py`](identity_matcher.py)を追加しました。既存[`parser.parse_rows`](parser.py)などから得た**2つの解析済みレコード列**を受け取り、JAN・ASIN・商品名、任意の型番・容量・入数を保守的に比較します。**見出しに複数のJAN列がある場合は**、元見出しに対して`mark_duplicate_jan_headers(records, header_row)`を実行して判定を弱める。Excelの数値型JANは先頭0喪失の可能性があるため、そのままJAN文字列とはしない。結果は`strong_candidate / id_candidate / name_only / conflict`などの**候補判定**であり、販売可能SKUの自動確定や仕入許可ではありません。多対多の一致は降格、矛盾は`conflict`として保持します。
 
 呼び出し例と架空データテスト、機密保護の注意は[IDENTITY_MATCH_READONLY.md](IDENTITY_MATCH_READONLY.md)を参照してください。**Google Driveからの自動取得・Excel/PDFの横断実行・Keepa照合・利益再計算・SP-API本番・GitHub ActionsのWIF本番処理には未接続**です。追加の有料サービスも導入していません。
 
