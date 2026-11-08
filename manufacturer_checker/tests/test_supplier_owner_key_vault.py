@@ -170,7 +170,7 @@ class OwnerVaultTests(unittest.TestCase):
         summary = self.export()
         self.assertTrue(summary['plaintext_file_created'])
         self.assertFalse(summary['detail_rows_logged'])
-        self.assertEqual(json.loads(self.output.read_text()), REPORT)
+        self.assertEqual(json.loads(self.output.read_text(encoding='utf-8')), REPORT)
         original = self.output.read_bytes()
         with self.assertRaises(FileExistsError):
             self.export()
