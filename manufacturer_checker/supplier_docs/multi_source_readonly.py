@@ -76,6 +76,7 @@ def normalize_selected_sources(specs):
     _check_specs(specs)
     normalized = []
     mapped_coverage = {}
+    ambiguous_field_source_counts = {}
     totals = {'records': 0, 'warnings': 0, 'rows_scanned': 0,
               'with_jan': 0, 'with_asin': 0, 'with_model': 0,
               'cost_present': 0, 'cost_tax_unknown': 0}
@@ -102,6 +103,11 @@ def normalize_selected_sources(specs):
         totals['cost_tax_unknown'] += sum(
             r['cost_present'] and r['cost_tax_mode'] == 'unknown'
             for r in records)
+        for warning in result['warnings']:
+            if 'AMBIGUOUS_COLUMNS' in warning['codes']:
+                for key in warning.get('fields', []):
+                    ambiguous_field_source_counts[key] = (
+                        ambiguous_field_source_counts.get(key, 0) + 1)
         for key in result['mapped_columns']:
             mapped_coverage[key] = mapped_coverage.get(key, 0) + 1
 
@@ -117,6 +123,8 @@ def normalize_selected_sources(specs):
             'records_with_cost_field': totals['cost_present'],
             'records_cost_tax_unknown': totals['cost_tax_unknown'],
             'mapped_source_counts': dict(sorted(mapped_coverage.items())),
+            'ambiguous_field_source_counts': dict(
+                sorted(ambiguous_field_source_counts.items())),
             'confirmed_product_matches': 0,
             'profit_calculation_allowed': False,
             'purchase_allowed': False,
