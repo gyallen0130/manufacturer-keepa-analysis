@@ -106,15 +106,23 @@ Cloud Run **Job** + Cloud Scheduler + Secret Manager + 非公開Cloud Storageの
 - `supplier-docs-worker`（将来のJob実行用SA）: 原本の読み取りと差分候補作成のみ。専用の `supplier-docs-reader` サービスアカウント**単体**へのToken Creatorを付与して代理認証し、Drive metadata readonlyとSheets readonlyの**それぞれ別の短命トークン**を利用する想定。対象フォルダへのViewer共有が別途必要です。**既存SP-API用SAは利用しません**。
 - `supplier-docs-review`（将来の認証済みレビューサービス用SA）: 人による実確認・承認記録の発行を担当。HMAC署名用Secretはこのサービスのみが閲覧します。レビューの本人認証・監査ログは未実装。
 - `supplier-docs-trigger`（将来のScheduler用SA）: 指定したSupplier Jobを起動する権限だけを持つ。Google APIのジョブ実行URLにはOAuthトークンを使います。**現時点ではスケジューラを作成・有効化しません**。
-- `supplier-docs-state-...`（専用のPrivate GCSバケット）: 暗号化した `supplier-docs/inventory.enc` と `supplier-docs/review-journal.enc` を永続化する候補。既存のSP-API用バケットには書き込みません。GCS世代の一致（`if_generation_match`）を必須にして、初回は0、更新は直前に取得した世代番号を指定します。公開アクセス防止、バージョニング、最小権限IAM、バックアップ・復元計画は導入前に要確認。
+- **2つの独立したPrivate GCSバケット**：`supplier-docs-state-...` は暗号化した `supplier-docs/inventory.enc` のみ、`supplier-docs-review-...` は暗号化した `supplier-docs/review-journal.enc` のみを保持。Workerは前者を読み書き、Reviewerは前者を閲覧するだけで後者を読み書き。Workerにはレビュー署名鍵やレビュー記録へのアクセスを与えません。既存SP-APIバケットは不使用。更新はGCS世代番号の一致を要求します。公開アクセス防止、バージョニング、最小権限IAM、バックアップ・復元計画は導入前に要確認。
 - Secret Managerの**3つの別々のSecret**: インベントリ暗号鍵（Workerのみ）、レビュー記録暗号鍵（Reviewerのみ）、署名鍵（Reviewerのみ）。アクセス権は**各Secret単体**に付与し、バージョンを明示します。実鍵はコード、GitHub Actions、Colab、標準ログに保存しません。
 
 ### 開発中の安全制御
 
-- `supplier_docs.cloud_runtime.validate_supplier_cloud_runtime` は非公開の配置案を**ネットワークアクセスなし**で検査します。Job・SA・バケットがSupplier専用であること、役割分離、Secret3個の分離と版固定、`dry_run`、スケジュール無効、単一並列、リトライ0、原本ログ無効、レビュー自動承認無効、Drive再帰探索無効を要求します。結果は匿名のチェック項目だけです。
+- `supplier_docs.cloud_runtime.validate_supplier_cloud_runtime` は非公開の配置案を**ネットワークアクセスなし**で検査します。Job・SA・分離した2バケットがSupplier専用であること、役割分離、Secret3個の分離と版固定、`dry_run`、スケジュール無効、単一並列、リトライ0、原本ログ無効、レビュー自動承認無効、Drive再帰探索無効を要求します。結果は匿名のチェック項目だけです。
 - `supplier_docs.auth.build_readonly_drive_metadata_service` は既存のSheets認証とは分離した `drive.metadata.readonly` の15分代理トークンを使います。Drive API有効化や実フォルダ共有は**まだ実施していません**。
 - `supplier_docs.cloud_state` は呼び出し元が明示的に渡した専用GCS Blobのみに暗号化した状態をアップロード・ダウンロードします。GCS世代前提条件で他の実行による上書き競合を防ぎ、未許可のバケット名・オブジェクト名は拒否します。**実GCSへの接続テストは未実施**。
-- インベントリとレビュー記録は**別々のGCSオブジェクト**のため、両方をまとめて更新するトランザクションではありません。導入前に単一実行保証、障害時の復旧、鍵ローテーション、暗号文のバックアップ、レビュー監査証跡を設計・検証します。
+- インベントリとレビュー記録は**別々のGCSバケット／オブジェクト**のため、両方をまとめて更新するトランザクションではありません。導入前に単一実行保証、障害時の復旧、鍵ローテーション、暗号文のバックアップ、レビュー監査証跡を設計・検証します。
+
+### 導入前の最小権限・費用プレビュー（オフライン）
+
+- `supplier_docs.deployment_review.plan_supplier_iam` は承認候補のIAMバインディングを**機密な内部リスト**として生成し、匿名のチェック結果を返します。Worker→Reader SAの `roles/iam.serviceAccountTokenCreator` はReader SA**単体**へ。Workerの `roles/storage.objectUser` はインベントリバケット単体、`roles/secretmanager.secretAccessor` はインベントリ鍵Secret単体。Reviewerのインベントリバケットは `roles/storage.objectViewer`、レビュー用バケットは `roles/storage.objectUser`、ジャーナル鍵と署名鍵は各Secret単体です。Schedulerの `roles/run.invoker` はSupplier Job単体への**将来の提案のみ**で、現時点では付与しません。
+- `validate_exact_iam_proposal` は付与候補リストへの管理者権限追加・スコープ拡大・欠落を拒否します。**実際のIAMを読み取って検査する機能ではなく、IAM変更も行いません**。レビュー署名の安全な受け渡しと2バケットの整合性保証は未解決なので、この段階で本番デプロイを許可しません。
+- `supplier_docs.budget_review.estimate_pilot_usage` は想定負荷を厳しく限定した**概算の使用量計算**で、費用見積書ではありません。例として1 vCPU・0.5GiB・1回120秒・月30回ならCPU 3,600 vCPU秒／メモリ1,800 GiB秒です。Cloud Runの公表参照無料枠240,000 vCPU秒／450,000 GiB秒と比べるだけで、東京リージョンの請求額、請求アカウント全体の既存利用量、ストレージ・レジストリ・ログ・API・通信費用は確定しません。
+- Cloud Schedulerは**無効・0ジョブ**が初期設定です。将来1ジョブにする場合は、請求アカウント共通の3ジョブ無料枠を使い切っていれば約$0.10／31日（2026年11月時点の公表単価）。Secret Managerの無料枠も請求アカウント共通で、アクティブなSecretバージョン最大6個と月10,000回のアクセスが無料枠です（既存利用分は未確認）。Artifact Registryは請求アカウント単位で0.5GiB月の無料枠があります。Cloud Storage・ログ保持・転送量・監視費用も別途確認が必要です。
+- 原本の価格・取引先名・ファイルID、IAMの実メールアドレスやバケット名を**公開リポジトリへ含めない**。料金をゼロ円と断定せず、Google Cloud Billingの実使用量・予算アラート・公式料金計算機による確認後に進めます。
 
 ### Google公式資料（将来の導入時に再確認）
 
@@ -123,6 +131,13 @@ Cloud Run **Job** + Cloud Scheduler + Secret Manager + 非公開Cloud Storageの
 - [Secret ManagerのSecret単位IAM](https://docs.cloud.google.com/secret-manager/docs/access-control)
 - [Cloud Storageの世代前提条件](https://docs.cloud.google.com/storage/docs/request-preconditions)
 - [Cloud Run JobをSchedulerで実行](https://docs.cloud.google.com/run/docs/execute/jobs-on-schedule)
+- [Cloud Runの料金と無料枠](https://cloud.google.com/run/pricing)
+- [Cloud Schedulerの料金と無料枠](https://cloud.google.com/scheduler/pricing)
+- [Secret Managerの料金と無料枠](https://cloud.google.com/secret-manager/pricing)
+- [Artifact Registryの料金](https://cloud.google.com/artifact-registry/pricing)
+- [Cloud Storageの料金](https://cloud.google.com/storage/pricing)
+- [Cloud Runの実行IAMロール](https://docs.cloud.google.com/iam/docs/roles-permissions/run)
+- [Cloud Storageの権限スコープ](https://docs.cloud.google.com/storage/docs/access-control/iam-roles)
 
 ## Cloud Run Jobの障害復旧シミュレーション（開発用、完全オフライン）
 
