@@ -3,14 +3,15 @@
 Pure offline checks; NO Google Cloud API, GitHub API, token exchange, IAM
 write, secret creation, workflow dispatch, or billing activity.
 
-A reviewed 40-hex GITHUB workflow_sha claim can narrow trust even when
+Both the reviewed GitHub workflow_sha AND the event sha (checked-out source)
+claims narrow trust even when
 GitHub Free private-branch rulesets are unavailable. This DOES NOT attest
 that the commit code, 3rd-party actions, dependency supply chain, or the
 service account's other IAM bindings are safe. Actual GCP and GitHub
 configuration must be read through an authorized separate process.
 
 Required attribute mappings include all claims named in the condition.
-Any edit to the reviewed workflow commit invalidates the pinned condition
+Any edit to the reviewed source commit invalidates the pinned condition
 until a new security review and separate human-approved Google IAM update.
 """
 import hmac
@@ -28,35 +29,41 @@ _REQUIRED_MAPPING = {
     "attribute.event_name": "assertion.event_name",
     "attribute.workflow_ref": "assertion.workflow_ref",
     "attribute.workflow_sha": "assertion.workflow_sha",
+    "attribute.sha": "assertion.sha",
     "attribute.repository_visibility": "assertion.repository_visibility",
     "attribute.runner_environment": "assertion.runner_environment",
 }
 
 
-def _expected_condition(plan_condition, reviewed_sha):
+def _expected_condition(plan_condition, reviewed_workflow_sha, reviewed_source_sha):
     return (
         plan_condition +
-        " && assertion.workflow_sha=='" + reviewed_sha + "'" +
+        " && assertion.workflow_sha=='" + reviewed_workflow_sha + "'" +
+        " && assertion.sha=='" + reviewed_source_sha + "'" +
         " && assertion.repository_visibility=='private'" +
         " && assertion.runner_environment=='github-hosted'"
     )
 
 
-def expected_pinned_provider_condition(settings, reviewed_workflow_sha):
+def expected_pinned_provider_condition(settings, reviewed_workflow_sha,
+                                       reviewed_source_commit_sha):
     """Return private expected CEL condition, not proof of actual GCP state.
 
     Never put this output in public CI logs or commit it with real IDs.
     """
     plan = plan_private_github_wif(settings)
     if (not isinstance(reviewed_workflow_sha, str)
-            or not _SHA.fullmatch(reviewed_workflow_sha)):
+            or not _SHA.fullmatch(reviewed_workflow_sha)
+            or not isinstance(reviewed_source_commit_sha, str)
+            or not _SHA.fullmatch(reviewed_source_commit_sha)):
         raise ValueError("a separately reviewed immutable workflow commit is required")
     return _expected_condition(
-        plan["private_required_provider_condition"], reviewed_workflow_sha)
+        plan["private_required_provider_condition"], reviewed_workflow_sha,
+        reviewed_source_commit_sha)
 
 
 def review_observed_reader_wif(
-        *, settings, reviewed_workflow_sha,
+        *, settings, reviewed_workflow_sha, reviewed_source_commit_sha,
         observed_github_repo, observed_provider, observed_reader_iam_policy):
     """Review externally supplied read-only snapshots; never authorize them.
 
@@ -66,7 +73,7 @@ def review_observed_reader_wif(
     project number, provider condition or token values in summary.
     """
     expected = expected_pinned_provider_condition(
-        settings, reviewed_workflow_sha)
+        settings, reviewed_workflow_sha, reviewed_source_commit_sha)
     if not all(isinstance(x, dict) for x in (
             observed_github_repo, observed_provider, observed_reader_iam_policy)):
         raise ValueError("complete read-only configuration snapshots required")
@@ -143,15 +150,20 @@ def review_observed_reader_wif(
         checks["google_oidc_provider_exactly_pinned"],
         checks["dedicated_reader_iam_principalset_matches"],
     ))
+    reviewed_checklist_complete = all(settings[k] for k in (
+        "provider_review_completed", "reader_share_scope_reviewed",
+        "quota_and_billing_reviewed", "private_state_store_reviewed"))
     # Branch protection is valuable but for Free private repos the
     # approved workflow SHA is a separate cloud-side pin, NOT a replacement
     # for full code integrity review. Never claim this is deployed.
     return {
         "status": (
             "eligible_for_separate_manual_connection_review"
-            if trust_checks_pass else "blocked_on_observed_trust_mismatch"),
+            if trust_checks_pass and reviewed_checklist_complete
+            else ("blocked_on_external_configuration_review" if trust_checks_pass
+                  else "blocked_on_observed_trust_mismatch")),
         "checks": checks,
-        "workflow_sha_pinned_to_reviewed_commit": provider_check,
+        "workflow_sha_and_source_commit_pinned": provider_check,
         "github_branch_is_unprotected": (
             observed_github_repo.get("default_branch_protected") is False),
         "manual_code_and_dependency_integrity_review_still_required": True,
