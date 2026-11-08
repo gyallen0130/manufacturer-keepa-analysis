@@ -75,6 +75,8 @@ def _safe_path(path, *, storage_reviewed, private_parent):
     if not parent.is_dir():
         raise ValueError('local private folder must exist before use')
     for item in (parent, *parent.parents):
+        if (item / '.git').exists():
+            raise PermissionError('supplier secrets cannot be stored in a Git working tree')
         info = item.lstat()
         if (not stat.S_ISDIR(info.st_mode)
                 or stat.S_ISLNK(info.st_mode)
