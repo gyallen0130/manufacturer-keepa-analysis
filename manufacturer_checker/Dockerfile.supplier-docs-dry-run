@@ -1,0 +1,31 @@
+# Synthetic-only Cloud Run Job candidate. Not a production worker.
+# No Drive, Sheets, GCS, SP-API, secrets or deployment tooling in the image.
+FROM python:3.11-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Only dependency of the pure crash-recovery test path.
+RUN pip install --no-cache-dir 'cryptography>=42,<47' \
+    && useradd --system --uid 10001 --home-dir /nonexistent \
+         --shell /usr/sbin/nologin supplierjob
+
+WORKDIR /app
+RUN mkdir -p /app/supplier_docs
+# Explicit source allowlist: do NOT copy the repository, auth clients, configs,
+# real source documents, environment files, tests, or any secret material.
+COPY --chown=10001:10001 \
+    supplier_docs/__init__.py \
+    supplier_docs/parser.py \
+    supplier_docs/drive_delta.py \
+    supplier_docs/snapshot_store.py \
+    supplier_docs/review_gate.py \
+    supplier_docs/recovery.py \
+    supplier_docs/job_dry_run.py \
+    /app/supplier_docs/
+
+USER 10001:10001
+# The Python parser rejects --live, --approve-all, scheduling or arbitrary code.
+ENTRYPOINT ["python", "-m", "supplier_docs.job_dry_run"]
+CMD ["--scenario", "after_scan"]
