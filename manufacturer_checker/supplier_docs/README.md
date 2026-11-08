@@ -1,3 +1,7 @@
+## 最新：認証済みSheetsとExcelの1回限りの混在検索（2026-11-08）
+- [`authorized_mixed_probe.py`](authorized_mixed_probe.py)を追加。Excel／Sheetsの**事前指定済みマニフェストを両方検証**し、合計5タブまでを同じPrivate Python環境で限定検索。Excelファイルの不備があればGoogleクライアントを生成せず、JAN/ASIN/POS/ITFの別検索を維持する。
+- **Google認証済み・読取専用サービスを外部から渡す設計**で、今回の実行環境には認証情報がないため**実Google API認証E2Eは未完了**。[架空データ8テスト](../tests/test_supplier_authorized_mixed_probe.py)と[導入前の条件](AUTHORIZED_MIXED_READONLY.md)を参照。既存認証・本番設定は変更しない。
+
 # 取引先資料の共通解析（試験版）
 
 Google Driveのメーカー／卸問屋別フォルダにある見積書・商品リストの**表部分**を、出典・リスク付きの共通JSONに変換する試験版です。従来のKeepa分析・Colab実行・GitHub Actionsとは接続していません。
