@@ -15,7 +15,7 @@ Google Driveのフォルダ階層の一覧、Excel・CSVの実ダウンロード
 
 ## Private GitHub Actionsの想定手順（未設置・未認証）
 
-1. 実行主体となる**専用の非公開リポジトリ**と、保護できる実行コード・監査できる承認手順を決める。現在の `amazon-business-knowledge` の未保護mainを自動機密処理の既定保存先にしない。
+1. 実行主体となる**専用の非公開リポジトリ**と、保護できる実行コード・監査できる承認手順を決める。保護設定を十分に検証できていない既存Private Repoのmainを自動機密処理の既定保存先にしない。
 2. レビュー済みの `manufacturer_checker/supplier_docs` コードと必要な依存コードをprivateリポジトリへ安全に配置する。公開開発中の未マージPRブランチを毎回追跡するのではなく、**レビュー済みの固定版**を使う。
 3. `templates/supplier-readonly.yml` をPrivate Repoの `.github/workflows/supplier-readonly.yml` へ置く。ただし今は**まだ置かない**。動くコードの確認と、環境の料金・セキュリティ審査が先。
 4. Google CloudのWIF providerとReader SA（既存SP-API用とは別）を確認。Google**側のprovider条件**には不変のGitHub `repository_owner_id`・`repository_id`、`refs/heads/main`、`workflow_dispatch`、実行workflowの完全な `workflow_ref` の一致を設定する。GitHub環境変数やworkflowの `if:` はこれを代替しない。Reader SAには**対象Google Sheetsだけ**をViewer共有する。既存の権限拡張はユーザー承認後にのみ。
