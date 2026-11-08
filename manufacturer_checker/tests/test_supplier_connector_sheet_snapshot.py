@@ -167,5 +167,37 @@ class ConnectorSnapshotTests(unittest.TestCase):
             normalize_selected_connector_snapshots(manifest=conf)
 
 
+    def test_native_export_never_confirms_price_or_order_unit(self):
+        conf = manifest('native_export_xlsx')
+        conf['sources'][0]['document_type'] = 'quote_response'
+        conf['sources'][0]['rows'] = [
+            ['商品名', 'JAN', '下代（税抜）', '発注単位'],
+            ['架空の商品', JAN, 500, '1箱'],
+        ]
+        result = normalize_selected_connector_snapshots(manifest=conf)
+        rec = result['private_normalized_docs'][0]['records'][0]
+        self.assertEqual(result['public_summary']['native_export_cost_flags_suppressed'], 1)
+        self.assertEqual(result['public_summary']['records_with_cost_field'], 0)
+        self.assertFalse(rec['cost_present'])
+        self.assertEqual(rec['cost_tax_mode'], 'unknown')
+        self.assertEqual(rec['order_multiple'], '')
+        self.assertEqual(rec['decision'], 'needs_confirmation')
+
+    def test_native_live_formula_values_are_not_export_suppressed(self):
+        conf = manifest('connector_formula_values')
+        conf['sources'][0]['document_type'] = 'quote_response'
+        conf['sources'][0]['rows'] = [
+            ['商品名', 'JAN', '下代（税抜）'],
+            ['架空の商品', JAN, 500],
+        ]
+        result = normalize_selected_connector_snapshots(manifest=conf)
+        rec = result['private_normalized_docs'][0]['records'][0]
+        self.assertEqual(result['public_summary']['native_export_cost_flags_suppressed'], 0)
+        self.assertTrue(rec['cost_present'])
+        # Even direct FORMULA values alone do NOT authorize profit or ordering.
+        self.assertFalse(result['public_summary']['profit_calculation_allowed'])
+
+
+
 if __name__ == '__main__':
     unittest.main()
