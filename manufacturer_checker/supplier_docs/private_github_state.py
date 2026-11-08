@@ -26,6 +26,7 @@ OWNER_REPO = re.compile(r'^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$')
 SHA = re.compile(r'^[a-f0-9]{40}$')
 BRANCH = 'supplier-monitor-state'
 PATH = 'private-state/supplier-docs-inventory.enc'
+AUDIT_PATH = 'private-state/supplier-docs-audit-v1.enc'
 API = 'https://api.github.com'
 HEADERS = {
     'Accept': 'application/vnd.github+json',
@@ -41,7 +42,7 @@ class PrivateGithubCheckpoint:
     repository, protected workflow code and an isolated state branch.
     """
 
-    def __init__(self, session, *, repository):
+    def __init__(self, session, *, repository, object_path=PATH):
         if (not isinstance(repository, str) or
                 not OWNER_REPO.fullmatch(repository) or
                 any(s in ('.', '..') for s in repository.split('/'))):
@@ -49,9 +50,12 @@ class PrivateGithubCheckpoint:
         if (not callable(getattr(session, 'get', None)) or
                 not callable(getattr(session, 'put', None))):
             raise ValueError('an authenticated HTTP session is required')
+        if object_path not in (PATH, AUDIT_PATH):
+            raise ValueError('private checkpoint object is not approved')
         self._session = session
         self._base = API + '/repos/' + repository
-        self._file = self._base + '/contents/' + PATH
+        self._path = object_path
+        self._file = self._base + '/contents/' + object_path
 
     def _get(self, url, *, params=None):
         try:
@@ -100,7 +104,7 @@ class PrivateGithubCheckpoint:
             return None, None
         if (not isinstance(data, dict)
                 or data.get('type') != 'file'
-                or data.get('path') != PATH
+                or data.get('path') != self._path
                 or data.get('encoding') != 'base64'
                 or not isinstance(data.get('sha'), str)
                 or not SHA.fullmatch(data['sha'])
