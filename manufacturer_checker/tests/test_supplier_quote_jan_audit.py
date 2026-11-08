@@ -5,6 +5,7 @@ import unittest
 
 from supplier_docs.quote_jan_audit import (
     attach_jan_audit_to_records, inspect_explicit_jan_columns,
+    summarize_jan_header_structure,
 )
 from supplier_docs.identity_matcher import compare_supplier_rows
 
@@ -123,6 +124,33 @@ class QuoteJanAuditTests(unittest.TestCase):
             rows, header_row_index=1, request_jan_column=1,
             reply_jan_column=2, reply_note_columns=(2, 3))
         self.assertEqual(res['public_summary']['status_counts']['same_as_displayed'], 1)
+
+
+    def test_jan_header_preflight_single_and_duplicate(self):
+        self.assertEqual(
+            summarize_jan_header_structure(
+                ['メーカー', '商品名', 'JAN', 'ASIN'])['status'], 'single')
+        self.assertEqual(
+            summarize_jan_header_structure(
+                ['商品名', 'JAN', 'ASIN', 'JAN', 'ケース入数'])['status'],
+            'duplicate_needs_review')
+        self.assertEqual(
+            summarize_jan_header_structure(
+                ['商品名', '価格'])['status'], 'missing')
+
+    def test_jan_header_preflight_aliases_and_privacy(self):
+        value = summarize_jan_header_structure(
+            ['JANコード', 'ＧＴＩＮ', 'EAN', 'バーコード', '商品名'])
+        self.assertEqual(value['status'], 'duplicate_needs_review')
+        self.assertEqual(value['jan_header_count'], 3)
+        self.assertEqual(value['product_rows_read'], 0)
+        self.assertNotIn('商品名', json.dumps(value, ensure_ascii=False))
+
+    def test_jan_header_preflight_invalid_and_bounded(self):
+        for bad in ('JAN', ['JAN'] * 33, [['JAN']], [True]):
+            with self.subTest(type=type(bad).__name__):
+                with self.assertRaises(ValueError):
+                    summarize_jan_header_structure(bad)
 
 
 if __name__ == '__main__':
