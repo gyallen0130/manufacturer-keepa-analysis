@@ -141,6 +141,14 @@ GitHub Billingについては、現行の無料枠を**当月の共有ドル建�
 
 設計の詳細・留意事項：[`PRIVATE_GITHUB_STATE.md`](PRIVATE_GITHUB_STATE.md)。この方式の導入は所有者承認後に限定します。新規有料ストレージ・Cloud Run・Scheduler・Secret Managerを前提にしません。
 
+## Windowsで所有者用の復号鍵を安全に扱う試験版（未導入）
+
+`owner_key_vault.py` は利用者のWindows端末にX25519秘密鍵を**新規生成し、パスフレーズからScryptで導出したAES-256-GCM鍵による暗号化ファイル**に保管する開発用部品です。本人の秘密鍵の平文ファイルやGitHub Secretsへの登録は行いません。鍵ファイルとパスフレーズは**別々の場所にバックアップ**する必要があります。
+
+`owner_result_cli.py` の `init-key`、`inspect`、`export` により、**対話端末から非表示入力**で初回鍵作成、GitHubから取得した暗号化データの件数確認、明示承認に基づくローカルJSON出力が可能です。ファイルを上書きせず、コマンド引数・標準出力へパスフレーズやメーカー価格を表示しません。**exportしたJSONは平文のため保護された非同期・非共有ローカルフォルダだけに保存**する必要があります。
+
+WindowsのNTFS ACL／BitLocker／同期フォルダの有無は**プログラムだけでは証明できず、実Windows端末での確認も未実施**。実ユーザー鍵の発行、実GitHub Artifactの受信・復号、GoogleのWIF認証はまだ行っていません。詳しい手順と注意は[`OWNER_WINDOWS_DECRYPT.md`](OWNER_WINDOWS_DECRYPT.md)を参照。新機能は公開開発PRで架空のデータ・鍵のみでテストします。
+
 ## メーカー詳細情報の利用者宛て暗号化（開発用・未配信）
 
 前回の「GitHubログには匿名件数だけ」という制限を維持したまま、`private_result_envelope.py` により**詳細なメーカー資料の解析結果を利用者のX25519公開鍵でAES-256-GCM暗号化**する機能を追加しました。暗号化時に毎回一時X25519鍵とnonceを作り、独立して確認した受信者公開鍵のSHA-256指紋が一致しないと拒否。**復号用の利用者秘密鍵はGitHubやGoogleに渡しません**。
