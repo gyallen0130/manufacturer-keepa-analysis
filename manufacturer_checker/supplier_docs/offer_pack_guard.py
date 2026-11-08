@@ -51,6 +51,54 @@ def mark_records_from_pack_guard(records, guard):
     ]
 
 
+def quote_unit_from_document_evidence(evidence):
+    """Fail closed when a supplier email only states case pack + generic price.
+
+    An unrelated/historical promotion may show 'case pack 50 boxes, price X'
+    but does not prove the 2025 quote's price is for one retail box.
+    Only an explicit per-retail-box statement on the SAME quote, or a
+    supplier's explicit clarification of THAT quote, can verify the unit.
+    Returns no prices, identifiers, document names, personal information or
+    case-pack figures.
+    """
+    if not isinstance(evidence, Mapping):
+        raise ValueError('quote-unit evidence must be a mapping')
+    scope = evidence.get('scope', 'unverified')
+    kind = evidence.get('kind', 'unverified')
+    allowed_scope = ('target_quote', 'other_promotion', 'unverified')
+    allowed_kind = ('explicit_per_retail_box', 'case_pack_and_price_only',
+                    'unverified')
+    if (type(scope) is not str or scope not in allowed_scope
+            or type(kind) is not str or kind not in allowed_kind):
+        raise ValueError('invalid quote-unit evidence label')
+    box_count = evidence.get('retail_boxes_per_quoted_price')
+    if box_count is not None and (type(box_count) is not int
+                                  or not 1 <= box_count <= _MAX_COUNT):
+        raise ValueError('invalid documented per-price box count')
+    trusted = (scope == 'target_quote' and
+               kind == 'explicit_per_retail_box' and box_count is not None)
+    if trusted:
+        status = 'explicit_quote_unit_verified'
+    elif scope == 'other_promotion':
+        status = 'related_promotion_cannot_verify_quote_unit'
+    else:
+        status = 'quote_price_unit_not_verified'
+    return {
+        'public_summary': {
+            'status': status,
+            'quote_unit_verified': trusted,
+            'profit_calculation_allowed': False,
+            'purchase_allowed': False,
+            'source_writes': 0,
+            'api_calls': 0,
+        },
+        'private_guard_quote': {
+            'inner_boxes_per_quoted_unit': box_count if trusted else None,
+            'quote_unit_verified': trusted,
+        },
+    }
+
+
 def evaluate_offer_pack_guard(quote, listing):
     """Return private non-identifier evidence and a log-safe decision.
 
