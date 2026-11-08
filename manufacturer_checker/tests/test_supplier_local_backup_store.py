@@ -151,6 +151,11 @@ class LocalBackupTests(unittest.TestCase):
             self.save(trusted_public_keys=other)
         self.assertFalse(self.path.exists())
 
+    def test_network_share_is_never_a_local_backup_destination(self):
+        remote = r'\\\\example.invalid\\private-backup\\supplier.enc'
+        with self.assertRaises((ValueError, PermissionError, OSError)):
+            self.save(path=remote)
+
     def test_missing_directory_and_relative_destination_are_rejected(self):
         with self.assertRaises(ValueError):
             self.save(path='relative-file.enc')
