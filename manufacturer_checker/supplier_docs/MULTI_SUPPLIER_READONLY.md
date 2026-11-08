@@ -1,5 +1,21 @@
 # 卸問屋横断の共通正規化・照会MVP（2026-11-08／開発用）
 
+## 最新検証：開発用Excelブリッジの実原本E2Eに成功
+
+2026-11-08、**4卸問屋・指定5シート（各A1:O40）**を`local_excel_bridge.inspect_selected_local_excel`本体で読んで`multi_source_readonly.normalize_selected_sources`へ渡す**私的な実原本試験を完了**。3シート解析・2シート多段見出し`needs_review`。ブラックス`.xlsx`のケースでは52商品候補・数式45件、`.xlsm`のケースでは60候補・数式117件。**値を載せず件数だけ報告**し、JANとASINの限定完全一致検索を各1件試験。**原本ハッシュは全件一致**。異なる卸同士の同一商品確定や全行の読み込みではない。詳しい匿名証跡：[Private Repoの実E2E記録](https://github.com/gyallen0130/amazon-business-knowledge/blob/main/suppliers/pilots/four-supplier-real-excel-e2e-2026-11-08.md)。
+
+同じ検証を複数社に繰り返す場合、**私的なJSONマニフェストのみを用いる匿名結果CLI**を使う。
+
+```sh
+# private authorized root and private JSON files are local to your environment.
+python -m supplier_docs.local_excel_probe \
+  --root /private/supplier-inputs \
+  --manifest /private/selected-sheets.json \
+  --search-manifest /private/private-lookup.json
+```
+
+標準出力は**件数・状態・警告のJSONだけ**。商品名・JAN/ASIN・価格・原本ファイルパス・検索語は出さない。入力不正の場合は**例外詳細やファイル名を標準エラーへ流さず拒否**する。CLI自体は架空Excelで[6件の回帰テスト](../tests/test_supplier_local_excel_probe.py)を実施した。**本番のDrive認証・自動ダウンロード・定期実行は持たない**。
+
 ## 目的
 
 今後の最優先方針は、**特定1社の見積価格を繰り返し調べることではなく、3〜5社の異なる資料から共通項目を抽出し、候補商品と原本へ戻れること**。開発コード[ `multi_source_readonly.py` ](multi_source_readonly.py)で既存の`parser.parse_rows`を一度に最大5資料へ適用し、結果を非公開の明細と公開安全な件数へ分離する。
