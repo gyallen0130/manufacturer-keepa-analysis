@@ -97,7 +97,7 @@ class TieredHeaderMappingTests(unittest.TestCase):
     def test_stale_or_wrong_header_cell_is_rejected(self):
         src = tiered_source()
         src['tiered_mapping'] = mapping()
-        src['rows'][2][1] = 'POSコード'
+        src['rows'][2][1] = 'ASIN'  # Remains tiered, but mapped JAN cell changed.
         with self.assertRaisesRegex(ValueError, 'exact field label'):
             normalize_selected_sources([src])
 
