@@ -55,12 +55,12 @@ def review_private_workflow_template(text):
     encrypted = (
         "SUPPLIER_PRIVATE_RESULT_MODE: owner_encrypted_artifact" in text
         and "python -m supplier_docs.manual_sheet_probe" in text
-        and "path: \${{ runner.temp }}/supplier-owner-encrypted-result.json" in text
+        and "path: ${{ runner.temp }}/supplier-owner-encrypted-result.json" in text
         and "retention-days: 1" in text
         and "if-no-files-found: error" in text
         and not any(keyword in text for keyword in (
             "upload-artifact@v3", "pull_request_target",
-            "GITHUB_TOKEN: \${{ secrets.", "--disable-verify",
+            "GITHUB_TOKEN: ${{ secrets.", "--disable-verify",
             "SUPPLIER_PRIVATE_RESULT_MODE: plaintext",
         ))
     )
