@@ -40,7 +40,9 @@ SHAの参照値はGitHubのタグから取得したものですが、**タグに
 
 `private_workflow_integrity.py`は、テンプレートの4 Actionsのコミット固定、手動`workflow_dispatch`・private・main限定、最小限の`permissions`、X25519暗号化Artifactだけの1日保存を構造的に検査します。ただし**完全なYAMLパーサー／セキュリティスキャナではありません**。
 
-**重要：Pythonの依存ライブラリが未固定。** 現行テンプレートの`pip install 'google-api-python-client>=2,<3'`等はハッシュ確認なしでPyPIからコードを取得できるため、**仕入価格を扱う実GitHub Runnerでの実行はブロック**します。信頼できるハッシュ付き依存ロックまたは検証済みwheelを導入し、コードを独立に監査するまで`private_workflow_integrity.py`は`blocked_on_workflow_or_dependency_review`を返します。
+**Pythonの依存ライブラリを22件のLinux/Python 3.11向けwheelで固定しました。** 2026-11-08の公開・架空データPR CIで公開PyPIのwheelをダウンロードしてSHA-256を計算し、`approved-requirements-hashed.txt`へ記録。テンプレートは`pip install --require-hashes --only-binary=:all:`でインストールし、別の仮想環境で**実際のSHA照合・pip check・重要モジュールのimportに成功**しています。`private_workflow_integrity.py`は実ロックを検査し、**次の人手レビューに進める**判定を返します。
+
+ただし、**SHA一致はパッケージの無害性や出所を証明しません**。Private Repoのアクセス権、Google WIFの実設定、GitHub Actionsの課金とArtifact保存料、ユーザー鍵の安全な保管・実データの接続は未確認です。したがって本番は引き続き**No-Go**。詳細は[PRIVATE_HASHED_WHEEL_LOCK.md](PRIVATE_HASHED_WHEEL_LOCK.md)。
 
 ## 認証上の重要な注意
 
@@ -51,7 +53,7 @@ SHAの参照値はGitHubのタグから取得したものですが、**タグに
 
 ## 次の進め方
 
-信頼済みのPrivate Repoに配置する具体的なレビュー対象コード・依存ロックが揃い、GitHub Billingの無料枠と支払停止条件が確認できた後、所有者の承認に基づき最小限のWIF条件を設定して、**既存の1 Google Sheet／1タブを手動1回**だけ読み取る実接続試験を行います。**現在は未実施**です。
+信頼済みのPrivate Repoの権限制限と固定済み依存wheelの安全性を独立に審査し、GitHub Billingの無料枠と支払停止条件が確認できた後、所有者の承認に基づき最小限のWIF条件を設定して、**既存の1 Google Sheet／1タブを手動1回**だけ読み取る実接続試験を行います。**現在は未実施**です。
 
 参考（Google・GitHub公式）：
 - https://docs.cloud.google.com/iam/docs/workload-identity-federation-with-deployment-pipelines
