@@ -188,12 +188,15 @@ class SheetsMultiBridgeTests(unittest.TestCase):
             self.assertNotIn(hidden, public)
 
     def test_no_api_writes_and_query_validation_before_cells(self):
-        svc = SheetsFake()
-        with self.assertRaises(ValueError):
-            inspect_selected_google_sheets(svc, manifest=approved(),
-                                           search={'field': 'jan', 'query': 123})
-        self.assertFalse(any(c[0] == 'values' for c in svc.calls))
-        self.assertTrue(all(c[0] in ('metadata', 'values') for c in svc.calls))
+        for field, query in [('jan', 123), ('product', '架空'),
+                             ('asin', 'B0'), ('unsupported', 'abcdef')]:
+            svc = SheetsFake()
+            with self.subTest(field=field, query=query):
+                with self.assertRaises(ValueError):
+                    inspect_selected_google_sheets(
+                        svc, manifest=approved(),
+                        search={'field': field, 'query': query})
+                self.assertEqual(svc.calls, [])  # No remote reads at all.
 
     def test_source_rows_unchanged_and_read_budget_capped(self):
         svc = SheetsFake()
