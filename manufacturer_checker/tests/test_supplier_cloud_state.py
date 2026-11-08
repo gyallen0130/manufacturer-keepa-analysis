@@ -74,7 +74,8 @@ class CloudStateTests(unittest.TestCase):
     def setUp(self):
         self.key = Fernet.generate_key()
         self.inventory_blob = FakeBlob('supplier-docs/inventory.enc')
-        self.journal_blob = FakeBlob('supplier-docs/review-journal.enc')
+        self.journal_blob = FakeBlob('supplier-docs/review-journal.enc',
+                                     bucket='supplier-docs-review-test-example')
         self.before = inventory('1')
         self.current = inventory('2')
         self.receipt = issue_review_receipt(
@@ -136,12 +137,24 @@ class CloudStateTests(unittest.TestCase):
                      bucket='amazon-spapi-production-data'),
             FakeBlob('amazon-spapi/private.enc'),
             FakeBlob('supplier-docs/review-journal.enc'),
+            FakeBlob('supplier-docs/inventory.enc',
+                     bucket='supplier-docs-review-test-example'),
         ]:
             with self.subTest(blob=blob.name), self.assertRaises(ValueError):
                 write_cloud_inventory(
                     blob, cipher_key=self.key, approved_snapshots=self.before,
                     expected_generation=0)
             self.assertEqual(blob.uploads, 0)
+
+    def test_review_journal_rejects_inventory_bucket(self):
+        wrongly_shared = FakeBlob('supplier-docs/review-journal.enc')
+        with self.assertRaises(ValueError):
+            write_cloud_review_journal(
+                wrongly_shared, cipher_key=self.key, signing_key=SIGN_KEY,
+                previous=self.before, current=self.current,
+                receipts=[self.receipt], allowed_reviewers=ACTORS,
+                expected_generation=0)
+        self.assertEqual(wrongly_shared.uploads, 0)
 
     def test_invalid_generation_and_state_fail_before_write(self):
         for value in (-1, None, '1', True):
