@@ -141,6 +141,16 @@ GitHub Billingについては、現行の無料枠を**当月の共有ドル建�
 
 設計の詳細・留意事項：[`PRIVATE_GITHUB_STATE.md`](PRIVATE_GITHUB_STATE.md)。この方式の導入は所有者承認後に限定します。新規有料ストレージ・Cloud Run・Scheduler・Secret Managerを前提にしません。
 
+## メーカー詳細情報の利用者宛て暗号化（開発用・未配信）
+
+前回の「GitHubログには匿名件数だけ」という制限を維持したまま、`private_result_envelope.py` により**詳細なメーカー資料の解析結果を利用者のX25519公開鍵でAES-256-GCM暗号化**する機能を追加しました。暗号化時に毎回一時X25519鍵とnonceを作り、独立して確認した受信者公開鍵のSHA-256指紋が一致しないと拒否。**復号用の利用者秘密鍵はGitHubやGoogleに渡しません**。
+
+`private_result_file.py` はGitHub Runnerの専用一時フォルダに**暗号文だけを新規作成**し、既存ファイルの上書きを拒否します。`manual_sheet_probe.py` は暗号化モードが指定されたとき、**Google APIを呼ぶ前に受信者鍵設定を検証**し、詳細な卸価格や商品データを暗号化ファイルに入れます。GitHub Actionsログには匿名件数しか出さず、失敗時もGoogle API原文を表示しません。
+
+未設置の[`templates/supplier-readonly.yml`](templates/supplier-readonly.yml)には、暗号化ファイル**だけ**を短期保存（1日）する `actions/upload-artifact@v4` の設定例を追加しました。**実Private Repo・実WIF・実メーカー資料への接続やArtifactアップロードは未実施**。GitHub Actions保存容量やRunner計算費の課金確認も未完了です。
+
+**これは機密の転送を可能にする部品で、最終的なユーザー参照画面ではありません。** 利用者自身の秘密鍵の安全な発行・保管・ローカル復号手順と、ChatGPTが必要なデータを安全に参照する権限付きチャネルはまだ未完成。詳しくは[`OWNER_ENCRYPTED_RESULT_DELIVERY.md`](OWNER_ENCRYPTED_RESULT_DELIVERY.md)を参照してください。
+
 ## GitHubから必要時にGoogle Sheetsを読み取る入口（開発版・未接続）
 
 `on_demand_reader.py` は**私的な許可リストをもとに最大3 Google Sheets／合計7,200セル**の明示指定タブだけを読み取り、メーカー資料・商品・JAN・ASIN・卸値などの解析結果を**プログラム内部の機密戻り値**へ保持します。公開してよいのは別に返される匿名の件数サマリーだけです。Drive全体のフォルダ検索・原本の編集・更新状態の自動確定・自動発注はありません。
