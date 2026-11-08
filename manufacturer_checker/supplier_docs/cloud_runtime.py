@@ -8,7 +8,7 @@ import re
 
 REQUIRED = frozenset({
     'project_id', 'region', 'job_name', 'worker_sa', 'reader_sa',
-    'review_sa', 'scheduler_sa', 'state_bucket',
+    'review_sa', 'scheduler_sa', 'state_bucket', 'review_bucket',
     'state_encryption_secret', 'journal_encryption_secret',
     'review_signing_secret', 'mode', 'schedule_enabled',
     'max_parallelism', 'max_retries', 'raw_data_logging',
@@ -46,6 +46,13 @@ def validate_supplier_cloud_runtime(manifest):
     if (not isinstance(bucket, str) or not _BUCKET.fullmatch(bucket)
             or not bucket.startswith('supplier-docs-state-')):
         raise ValueError('state bucket must be supplier-specific')
+
+    review_bucket = manifest['review_bucket']
+    if (not isinstance(review_bucket, str)
+            or not _BUCKET.fullmatch(review_bucket)
+            or not review_bucket.startswith('supplier-docs-review-')
+            or review_bucket == bucket):
+        raise ValueError('separate supplier review bucket required')
 
     identities = []
     for key in ('worker_sa', 'reader_sa', 'review_sa', 'scheduler_sa'):
@@ -96,6 +103,7 @@ def validate_supplier_cloud_runtime(manifest):
         'configuration_valid': True,
         'operation': 'offline_preflight_only',
         'separate_identities': 4,
+        'separate_state_and_review_buckets': True,
         'separate_version_pinned_secrets': 3,
         'scheduler_enabled': False,
         'automatic_review_enabled': False,
