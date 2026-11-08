@@ -11,6 +11,7 @@ import re
 import unicodedata
 
 from .parser import DOCUMENT_TYPES, parse_rows
+from .header_layout_guard import inspect_header_layout
 
 MAX_SOURCES = 5
 MAX_ROWS_PER_SOURCE = 200
@@ -78,13 +79,30 @@ def normalize_selected_sources(specs):
     mapped_coverage = {}
     ambiguous_field_source_counts = {}
     source_status_counts = {'parsed': 0, 'empty': 0, 'needs_review': 0}
+    header_layout_counts = {
+        'single_row': 0, 'multi_row_needs_review': 0,
+        'no_reliable_header': 0, 'empty': 0,
+    }
+    duplicate_jan_header_sources = 0
+    multiple_price_header_sources = 0
     totals = {'records': 0, 'warnings': 0, 'rows_scanned': 0,
               'with_jan': 0, 'with_asin': 0, 'with_model': 0,
               'cost_present': 0, 'cost_tax_unknown': 0}
     for spec in specs:
         rows = spec['rows']
         totals['rows_scanned'] += len(rows)
-        if not rows or not any(
+        # This is a shared, format-neutral preflight: local Excel and
+        # Google Sheets must not interpret tiered price-list headers as
+        # one verified item/price row. Read only the bounded header window.
+        layout = inspect_header_layout([list(r[:15]) for r in rows[:40]])
+        header_layout_counts[layout['status']] += 1
+        duplicate_jan_header_sources += (
+            'duplicate_jan_heading' in layout['warnings'])
+        multiple_price_header_sources += (
+            'multiple_price_hints' in layout['warnings'])
+        if layout['status'] == 'multi_row_needs_review':
+            status, result = 'needs_review', None
+        elif not rows or not any(
                 cell is not None and str(cell).strip()
                 for row in rows for cell in row):
             status = 'empty'
@@ -96,7 +114,10 @@ def normalize_selected_sources(specs):
                     source_file_id=spec['source_file_id'],
                     source_url=spec.get('source_url', ''),
                     source_sheet=spec['source_sheet'],
-                    header_row=spec.get('header_row'),
+                    header_row=(
+                        spec.get('header_row')
+                        if spec.get('header_row') is not None else
+                        layout['header_row']),
                     max_rows=MAX_ROWS_PER_SOURCE,
                     include_sensitive=False,
                 )
@@ -112,6 +133,7 @@ def normalize_selected_sources(specs):
         if result is None:
             normalized.append({
                 'source_status': status,
+                'header_layout_status': layout['status'],
                 'source_file_id': spec['source_file_id'],
                 'source_url': spec.get('source_url', ''),
                 'source_sheet': spec['source_sheet'],
@@ -123,6 +145,7 @@ def normalize_selected_sources(specs):
             })
             continue
         result['source_status'] = status
+        result['header_layout_status'] = layout['status']
         records = result['records']
         normalized.append(result)
         totals['records'] += len(records)
@@ -146,6 +169,9 @@ def normalize_selected_sources(specs):
         'public_summary': {
             'source_count': len(normalized),
             'source_status_counts': source_status_counts,
+            'header_layout_counts': header_layout_counts,
+            'sources_with_duplicate_jan_headers': duplicate_jan_header_sources,
+            'sources_with_multiple_price_hints': multiple_price_header_sources,
             'all_selected_windows_parsed': source_status_counts['parsed'] == len(normalized),
             'rows_scanned': totals['rows_scanned'],
             'record_count': totals['records'],
