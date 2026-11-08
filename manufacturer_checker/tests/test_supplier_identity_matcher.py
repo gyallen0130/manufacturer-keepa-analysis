@@ -142,5 +142,25 @@ class SupplierIdentityTests(unittest.TestCase):
         self.assertEqual(result['public_summary']['candidate_pairs'], 0)
 
 
+    def test_unresolved_duplicate_jan_headers_prevent_strong(self):
+        # Two columns both named JAN; only the first has been mapped.
+        # This is a source ambiguity, not independent evidence of the SKU.
+        left = row()
+        right = row(jan_source_ambiguous=True)
+        result = compare_supplier_rows([left], [right])
+        self.assertEqual(result['private_pairs'][0]['status'], 'id_candidate')
+        self.assertIn('jan_columns_require_review',
+                      result['private_pairs'][0]['evidence_codes'])
+        self.assertEqual(result['public_summary']['confirmed_saleable_skus'], 0)
+
+    def test_verified_single_jan_source_can_remain_strong(self):
+        result = compare_supplier_rows(
+            [row(jan_source_ambiguous=False)],
+            [row(jan_source_ambiguous=False)])
+        self.assertEqual(result['private_pairs'][0]['status'], 'strong_candidate')
+        self.assertNotIn('jan_columns_require_review',
+                         result['private_pairs'][0]['evidence_codes'])
+
+
 if __name__ == '__main__':
     unittest.main()
