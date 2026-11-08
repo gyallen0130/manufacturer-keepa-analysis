@@ -76,7 +76,8 @@ class ConnectorSnapshotTests(unittest.TestCase):
             search={'field': 'asin', 'query': ASIN})
         self.assertEqual(result['public_search_summary']['hits_returned'], 1)
         self.assertEqual(result['private_hits'][0]['source_row'], 2)
-        self.assertEqual(result['private_hits'][0]['source_file_id'], SOURCE_ID)
+        self.assertEqual(result['private_hits'][0]['source_index'], 0)
+        self.assertEqual(result['private_normalized_docs'][0]['source_file_id'], SOURCE_ID)
 
     def test_connector_formula_values_method_keeps_numeric_types_and_formulas(self):
         conf = manifest('connector_formula_values')
