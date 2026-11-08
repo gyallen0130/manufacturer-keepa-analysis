@@ -102,6 +102,9 @@ def _normal(row):
         # barcode cells with unclear semantics. Never approve a strong match
         # based only on the first JAN column in that situation.
         'jan_source_ambiguous': row.get('jan_source_ambiguous') is True,
+        # Amazon multi-box sale unit must be independently reconciled with
+        # the supplier quote before a candidate can be considered strong.
+        'offer_pack_review_required': row.get('offer_pack_review_required') is True,
     }
 
 
@@ -140,7 +143,9 @@ def _classify(a, b):
     elif (same_jan and shared_asin and same_name and
           not a['ambiguous_asin'] and not b['ambiguous_asin']
           and not a['jan_source_ambiguous']
-          and not b['jan_source_ambiguous']):
+          and not b['jan_source_ambiguous']
+          and not a['offer_pack_review_required']
+          and not b['offer_pack_review_required']):
         status = 'strong_candidate'
     elif same_jan or shared_asin:
         status = 'id_candidate'
@@ -151,6 +156,8 @@ def _classify(a, b):
         evidence.append('ambiguous_asin')
     if a['jan_source_ambiguous'] or b['jan_source_ambiguous']:
         evidence.append('jan_columns_require_review')
+    if a['offer_pack_review_required'] or b['offer_pack_review_required']:
+        evidence.append('offer_pack_unit_requires_review')
     return {'status': status, 'evidence_codes': sorted(evidence)}
 
 
