@@ -165,7 +165,7 @@ WindowsのNTFS ACL／BitLocker／同期フォルダの有無は**プログラム
 
 別途、未設置の`templates/supplier-readonly.yml`を改修し、外部4 Actionsを**公式GitHubの該当タグから確認した40桁コミットSHAに固定**しました。`private_workflow_integrity.py`が手動Private実行、狭いGITHUB_TOKEN権限、暗号化Artifactだけの保存と依存ライブラリのハッシュ固定を検査します。
 
-**現在のテンプレートはPythonライブラリのハッシュ付き依存ロックが未完成のため、意図的に「本番導入不可」を返します。** 監査対象の固定依存と、実Private Repo、GitHub請求・GCP WIFの確認が揃うまで実データへのGitHub経由接続は開始しません。
+**Python 3.11/Linux向けの22パッケージはバージョン・SHA-256ハッシュを固定し、CIでハッシュ照合付きインストールまで成功しました。** [`approved-requirements-hashed.txt`](approved-requirements-hashed.txt)をテンプレートが使用し、`private_workflow_integrity.py`は実ファイルを読んだうえで依存の構文検査をします。しかし**ハッシュ一致だけでは依存コードが安全とは限りません**。実Private Repoの保護、GitHub請求、Google WIFの実設定、ユーザー鍵の安全性の確認が終わるまで本番へ接続しません。詳細は[`PRIVATE_HASHED_WHEEL_LOCK.md`](PRIVATE_HASHED_WHEEL_LOCK.md)。
 
 詳しい手順・残る課題は[`GCLOUD_READONLY_AND_WORKFLOW_GATE.md`](GCLOUD_READONLY_AND_WORKFLOW_GATE.md)を参照。実メーカーの価格やIDは公開GitHub CIやコードへ加えません。
 
