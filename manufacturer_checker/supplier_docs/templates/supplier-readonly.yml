@@ -1,6 +1,9 @@
 # TEMPLATE ONLY: copy into a REVIEWED PRIVATE repository as:
 # .github/workflows/supplier-readonly.yml
 # NOT active in this public development repository.
+# Artifact storage/Actions compute can incur charges; verify billing, stop
+# budget and repository permissions before enabling.
+# Never put the OWNER's X25519 PRIVATE key into any GitHub repo or Secrets.
 # Do NOT enable until Google-side WIF conditions, IAM, billing, workflow
 # integrity and private secret handling have been independently reviewed.
 name: Supplier manual Sheets read - PRIVATE ONLY
@@ -29,6 +32,11 @@ jobs:
     env:
       SUPPLIER_REPO_PRIVATE: ${{ github.event.repository.private }}
       SUPPLIER_READ_MANIFEST_JSON: ${{ secrets.SUPPLIER_READ_MANIFEST_JSON }}
+      # Public OWNER recipient key only. Verify the fingerprint independently
+      # before installing this template into a protected PRIVATE repository.
+      SUPPLIER_PRIVATE_RESULT_MODE: owner_encrypted_artifact
+      SUPPLIER_RECIPIENT_PUBLIC_KEY_B64: ${{ vars.SUPPLIER_RECIPIENT_PUBLIC_KEY_B64 }}
+      SUPPLIER_RECIPIENT_KEY_FINGERPRINT_SHA256: ${{ vars.SUPPLIER_RECIPIENT_KEY_FINGERPRINT_SHA256 }}
     steps:
       - name: Check out pre-reviewed private workflow code
         uses: actions/checkout@v4
@@ -52,3 +60,12 @@ jobs:
       - name: Inspect approved Sheets (redacted counts ONLY)
         working-directory: manufacturer_checker
         run: python -m supplier_docs.manual_sheet_probe
+      - name: Upload OWNER-ENCRYPTED output only (short retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: supplier-owner-encrypted-result
+          path: ${{ runner.temp }}/supplier-owner-encrypted-result.json
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
