@@ -159,6 +159,14 @@ WindowsのNTFS ACL／BitLocker／同期フォルダの有無は**プログラム
 
 **これは機密の転送を可能にする部品で、最終的なユーザー参照画面ではありません。** 利用者自身の秘密鍵の安全な発行・保管・ローカル復号手順と、ChatGPTが必要なデータを安全に参照する権限付きチャネルはまだ未完成。詳しくは[`OWNER_ENCRYPTED_RESULT_DELIVERY.md`](OWNER_ENCRYPTED_RESULT_DELIVERY.md)を参照してください。
 
+## Reader専用WIFの固定コミット認証チェック（読み取り専用・未接続）
+
+`pinned_wif_audit.py` に、**GitHubの数値リポジトリID・owner IDとPrivate Repo状態、Google側OIDC issuerと属性マッピング、Reader専用SAのWorkload Identity User IAM policy**を、別途取得した実設定と照合する部品を追加しました。**`workflow_sha`と実行元ソースの`sha`を両方固定**して、未レビューのWorkflow／解析コードからGoogle Reader権限を使えないようにする案です。GitHub Freeの非公開ブランチ保護制約への対策候補ですが、第三者Actions・Python依存コードの安全性や管理者権限は別審査が必要です。
+
+既存のGoogle Drive接続の読み取り専用確認では、**事前検証に使う2件のGoogle Sheetsの権限に専用`supplier-docs-reader` SAの`reader`共有が存在**することを確認しました。ただしChatGPTのDrive接続での確認であり、**GitHub Actions→Google WIF→Reader SAの実認証はまだ未実施**。今はGoogle CloudのWIF provider/IAMを読み出せる接続がなく、実設定の照合は未完了です。
+
+テストは全て架空データで、Google IAM・GitHub Secrets・課金・SP-API本番設定を変更しません。詳細は[`PINNED_WIF_CONNECTION_REVIEW.md`](PINNED_WIF_CONNECTION_REVIEW.md)を参照。
+
 ## GitHubから必要時にGoogle Sheetsを読み取る入口（開発版・未接続）
 
 `on_demand_reader.py` は**私的な許可リストをもとに最大3 Google Sheets／合計7,200セル**の明示指定タブだけを読み取り、メーカー資料・商品・JAN・ASIN・卸値などの解析結果を**プログラム内部の機密戻り値**へ保持します。公開してよいのは別に返される匿名の件数サマリーだけです。Drive全体のフォルダ検索・原本の編集・更新状態の自動確定・自動発注はありません。
