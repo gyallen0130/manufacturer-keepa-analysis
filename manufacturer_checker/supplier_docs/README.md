@@ -124,6 +124,32 @@ Cloud Run **Job** + Cloud Scheduler + Secret Manager + 非公開Cloud Storageの
 - [Cloud Storageの世代前提条件](https://docs.cloud.google.com/storage/docs/request-preconditions)
 - [Cloud Run JobをSchedulerで実行](https://docs.cloud.google.com/run/docs/execute/jobs-on-schedule)
 
+## Cloud Run Jobの障害復旧シミュレーション（開発用、完全オフライン）
+
+`supplier_docs.recovery.assess_recovery` は、スキャン開始時の基準点・更新候補・実際の保存済み状態・GCS世代番号・署名付きレビュー記録を照合する**純粋な判定関数**です。外部APIの呼び出し、スナップショット書き込み、署名発行や承認を行いません。
+
+- 保存済み状態が元の基準点のままで、未確認資料が残る場合は `resume_only_unreviewed_items` を返し、署名済みの確認済み資料は再確認候補から除きます。
+- 全件確認済みでも `ready_for_external_revalidation_not_committed` と返します。**別の信頼済み処理で原本の更新版を再確認し、GCSの世代番号で条件付き保存するまで完了扱いにしません**。
+- GCSの世代番号が開始時と違う場合は `halt_concurrent_inventory_generation`、保存済みの内容が予期せず変わった場合は `halt_unexpected_persisted_inventory` として停止します。
+- **スナップショット保存は成功したが、その直後にジョブが停止した場合**は `halt_advanced_inventory_requires_journal_reconciliation` とし、人によるレビュー記録と保存状態の照合を要求します。現状、インベントリとレビュー記録は別々のGCSオブジェクトであり、双方をまとめて確定するトランザクションは未実装です。
+- **ソース資料が変更された場合は以前の承認を流用しません**。古い版の署名、改ざん、未許可承認者は例外とし、復旧結果を確定しません。
+
+### 認証情報が不要なドライラン
+
+```bash
+cd manufacturer_checker
+python -m supplier_docs.job_dry_run --scenario after_scan
+python -m supplier_docs.job_dry_run --scenario partial_review
+python -m supplier_docs.job_dry_run --scenario all_reviewed
+python -m supplier_docs.job_dry_run --scenario cas_committed
+python -m supplier_docs.job_dry_run --scenario cas_conflict
+python -m supplier_docs.job_dry_run --scenario unchanged
+```
+
+この入口は**架空データ専用**です。Google Cloudの認証情報や本番データを読み込まず、外部通信もしません。出力は匿名の件数と復旧方針のみです。`--live`、自動承認、スケジュール実行などの引数は受け付けません。GitHub ActionsのPR用CIでもクラッシュ・競合の代表パターンを実行します。
+
+**残る本番導入要件**：Cloud Run用のコンテナ化、Cloud Run Jobの実行環境、専用IAM・Secret・Cloud Storage、書き込みロック／クラッシュ復旧と2オブジェクト間の整合性保証、実フォルダの追加閲覧権限、本人確認を伴う承認画面、実データでの統合テスト。これらはまだ設定・実行していません。既存のSP-API本番リソースは変更していません。
+
 ## 安全なAPI接続の試運転
 
 上の鍵なし代理認証手順に従い、まず1シートの40行以内だけを `--summary-only` で試験してください。サービスアカウントはViewer権限のみ、トークンは15分の `spreadsheets.readonly` スコープです。
