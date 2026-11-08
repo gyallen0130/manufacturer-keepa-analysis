@@ -156,9 +156,9 @@ class OwnerVaultTests(unittest.TestCase):
             self.export()
         self.assertFalse(self.output.exists())
         self.artifact.write_bytes(original)
-        wrong = self.artifact.read_text().replace(
-            '"ciphertext_b64":"', '"ciphertext_b64":"!!!!')
-        self.artifact.write_text(wrong, encoding='utf-8')
+        wrong = json.loads(self.artifact.read_text())
+        wrong['ciphertext_b64'] = '!!!!' + wrong['ciphertext_b64']
+        self.artifact.write_text(json.dumps(wrong), encoding='utf-8')
         with self.assertRaises(ValueError):
             self.read()
         self.assertFalse(self.output.exists())
