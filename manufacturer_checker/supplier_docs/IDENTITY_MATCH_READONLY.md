@@ -88,6 +88,40 @@ python -m unittest -v tests.test_supplier_identity_matcher tests.test_supplier_i
 - 公開メーカー資料の検証概要は[共通知識側の匿名記録](https://github.com/gyallen0130/amazon-business-knowledge/blob/main/suppliers/pilots/itou-official-jan-crosscheck-2026-11-08.md)。JAN／ASIN／個別見積金額は本リポジトリには保存しない。
 - 新関数のテストは架空の見出しだけで実行する。Google Drive原本に対してこのPython関数を実際に一括起動するものではない。
 
+## Amazon販売単位とメーカー個装の違い（2026-11-08追加）
+
+[offer_pack_guard.py](offer_pack_guard.py)で、**メーカー個装50枚**と**Amazonの「1ASINが何箱か」**、**見積単価の購入単位（1箱・複数箱）**、卸の**ケース入数**を混同しないチェックを追加した。Amazonの商品詳細を自動取得する機能ではない。
+
+2026-11-08に外部のAmazon情報転載サイトを調べると、対象のマスク候補で`50枚×4箱`／`50枚×2箱`という掲載があった。一方メーカー公式の個装は各`50枚`。**Amazon本体の現在の販売単位は直接検証できなかった**ので、転載を`amazon_direct_verified`として扱わず、`secondary_listing`とする。メーカーの旧新JANの正式対応や商品同一性も未確認で、確定SKUや仕入利益を推定しない。
+
+次の例は**架空の商品**であり、価格・実ASIN・実JANや原本のSKU行を公開しない：
+
+```python
+from supplier_docs.offer_pack_guard import (
+    evaluate_offer_pack_guard, mark_records_from_pack_guard,
+)
+
+# ケース入数は物流単位。見積の「1単価が何箱分か」は未確認。
+quote = {'items_per_inner_box': 50, 'case_pack': 50}
+listing = {'items_per_inner_box': 50, 'inner_boxes_per_offer': 4,
+           'source': 'secondary_listing'}
+guard = evaluate_offer_pack_guard(quote, listing)
+assert guard['public_summary']['status'] == 'needs_quoted_purchase_unit'
+assert guard['public_summary']['profit_calculation_allowed'] is False
+
+# privateな許可済み行にフラグだけを付けて、既存の比較器に渡せる。
+private_rows = [{'asin_candidate': 'B0TEST0001',
+                 'product_name_raw': '架空マスク'}]
+guarded_rows = mark_records_from_pack_guard(private_rows, guard)
+assert guarded_rows[0]['offer_pack_review_required'] is True
+```
+
+`mark_records_from_pack_guard`で販売単位が未検証のレコードへ`offer_pack_review_required=True`を付けると、[identity_matcher.py](identity_matcher.py)でJAN・ASIN・商品名が一致しても`strong_candidate`とせず、`id_candidate`（`offer_pack_unit_requires_review`）に抑える。原本レコードは改変しない。
+
+**重要な制約**：`case_pack`を`inner_boxes_per_quoted_unit`に流用してはいけない。原本の購入単位が明示・検証されていなければ判定を保留する。`source='amazon_direct_verified'`を渡すのは、使用者側が実際にAmazonの該当ASIN・選択バリエーション・箱数を直接確認した場合に限る。どんな入力でも、この独立ガードは利益計算・発注を許可しない。
+
+[17件の架空データテスト](../tests/test_supplier_offer_pack_guard.py)で2箱・4箱・単位不明・外部転載・単位一致・型異常・既存商品照合器への確認フラグ伝播を検証。原本取引データやAmazon認証はテストに不要。実調査の出典・保留事項は[共通知識側の記録](https://github.com/gyallen0130/amazon-business-knowledge/blob/main/suppliers/pilots/itou-amazon-packaging-risk-2026-11-08.md)に保管する。**現時点ではDraft PR内の開発部品で、本番ワークフローへは接続しない。**
+
 ## 未実装・未確認
 
 - この関数は、既存 `on_demand_reader.inspect_manual_approved_sheets(...)` の戻り値に含まれる **`private_inspections[i]['tabs'][j]['records']`** を、許可済みの非公開処理から明示的に選んで呼べる。ただし自動選択・常時監視・商品同一性の最終確定は行わない。
