@@ -8,6 +8,14 @@ Google Driveのメーカー／卸問屋別フォルダにある見積書・商�
 
 `quote_jan_audit.summarize_jan_header_structure(header_row)` により、**商品セルを読まずに**「JAN列が見つからない／1列／複数列」を見分ける。1列の通常見積と、イトウのように依頼時・回答時のJAN欄が2つある資料を混同しない。これはオフラインの読取専用関数で、Driveの全社巡回や自動発注・自動価格判断には接続していない。
 
+## 追加：4社の資料を共通形式で正規化・横断検索（オフライン開発MVP）
+
+[`multi_source_readonly.py`](multi_source_readonly.py)は、手動で事前承認されたGoogle Sheets/Excel等の**2次元行配列を最大5資料まで**既存パーサーに渡し、JAN/ASIN/商品名/品番/メーカー名による**限定範囲の横断照会**を行う。メーカー別タブの名前を行のメーカー名と同一視せず、価格列が複数ある資料では単価を推測で採用しない。
+
+2026-11-08に**井上、ワコーフーズ、ヨシダ、イトウ**の原本Google Sheetsから先頭の列見出しを実確認し、その**見出し形式だけを再現した架空資料4つ**で[15件の合成データテスト](../tests/test_supplier_multi_source_readonly.py)を追加した。商品別の実JAN・原価・行データは公開コード/CI/Private GitHubに複製しない。
+
+公開するのは件数・フィールド被覆数だけの`public_summary`。実商品名や原本行への参照を含む`private_normalized_docs`・`private_hits`は**非公開の一時処理内だけ**で利用する。実Google Driveの複数シートからこの新Python関数へ自動入力する部分、全112社巡回、仕入価格判定、Keepa/SP-API本番連携は**未実装**。詳細と使用例：[MULTI_SUPPLIER_READONLY.md](MULTI_SUPPLIER_READONLY.md)。
+
 ## 追加：別日の販促メールで別見積の単価単位を証明しない
 
 `offer_pack_guard.quote_unit_from_document_evidence` は、**原本の対象見積自体に購入単位が明示されているか**と、**同じ商品の別販促メールにケース入数／単価が載っているだけか**を分ける。後者は`related_promotion_cannot_verify_quote_unit`とし、`inner_boxes_per_quoted_unit=None`のまま保留する。卸のケース入数50箱を小売の「見積単価50箱分」や「1箱分」と仮定しない。使用例は[IDENTITY_MATCH_READONLY.md](IDENTITY_MATCH_READONLY.md)。GitHub Actionsの回帰テストは架空データのみ。
