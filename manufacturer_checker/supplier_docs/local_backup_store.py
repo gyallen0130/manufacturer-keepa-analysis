@@ -30,6 +30,10 @@ def _checked_location(path, *, windows_storage_reviewed):
     if not p.is_absolute() or p.name in ("", ".", ".."):
         raise ValueError("explicit absolute backup file path required")
     if os.name == "nt":
+        # UNC shares are not a verified independent local NTFS device, and
+        # may be transparently mirrored to another service.
+        if p.drive.startswith('\\\\'):
+            raise ValueError("network share backup destination is unsupported")
         if windows_storage_reviewed is not True:
             raise PermissionError(
                 "operator must review Windows ACL and disk encryption")
