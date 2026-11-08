@@ -20,6 +20,7 @@ from .multi_source_readonly import (
 )
 from .parser import DOCUMENT_TYPES
 from .tiered_header_mapping import validate_tiered_mapping_schema
+from .row_labeled_candidates import validate_row_label_mapping
 
 SCHEMA_VERSION = 'manual-local-excel-v1'
 MODE = 'manual_local_excel_readonly'
@@ -30,7 +31,7 @@ MAX_ROWS = 40
 MAX_COLS = 15
 _TARGET_KEYS = frozenset({
     'relative_path', 'sheet_name', 'document_type', 'header_row',
-    'tiered_mapping',
+    'tiered_mapping', 'row_labeled_mapping',
 })
 _SHEET = re.compile(r'^[^\x00-\x1f]{1,100}$')
 _ALLOWED_SUFFIXES = frozenset(('.xlsx', '.xlsm'))
@@ -72,12 +73,19 @@ def validate_excel_manifest(manifest):
         if identifier in selected:
             raise ValueError('duplicate workbook tab selection')
         tiered_mapping = target.get('tiered_mapping')
+        row_labeled_mapping = target.get('row_labeled_mapping')
+        if tiered_mapping is not None and row_labeled_mapping is not None:
+            raise ValueError('only one review mapping is allowed')
+        if row_labeled_mapping is not None:
+            validate_row_label_mapping(row_labeled_mapping)
+            if header is not None:
+                raise ValueError('row-label mapping conflicts with header row')
         if tiered_mapping is not None:
             validate_tiered_mapping_schema(tiered_mapping)
             if header is not None:
                 raise ValueError('cannot mix single header with tiered mapping')
         selected.add(identifier)
-        checked.append((path, sheet, kind, header, tiered_mapping))
+        checked.append((path, sheet, kind, header, tiered_mapping, row_labeled_mapping))
     return checked
 
 
@@ -100,7 +108,7 @@ def inspect_selected_local_excel(*, root_dir, manifest, search=None):
     root_resolved = root.resolve(strict=True)
     paths = []
     total_bytes = 0
-    for relative, tab, kind, header, tiered_mapping in selected:
+    for relative, tab, kind, header, tiered_mapping, row_labeled_mapping in selected:
         child = root / relative
         if child.is_symlink():
             raise ValueError('selected file cannot be a symlink')
@@ -112,7 +120,7 @@ def inspect_selected_local_excel(*, root_dir, manifest, search=None):
         if (size > MAX_FILE_BYTES or total_bytes > MAX_TOTAL_BYTES
                 or not zipfile.is_zipfile(path)):
             raise ValueError('invalid or oversized Excel workbook')
-        paths.append((path, relative, tab, kind, header, tiered_mapping))
+        paths.append((path, relative, tab, kind, header, tiered_mapping, row_labeled_mapping))
 
     from openpyxl import load_workbook
 
@@ -124,7 +132,7 @@ def inspect_selected_local_excel(*, root_dir, manifest, search=None):
         opened = {}
         # Open and validate EVERY target tab first. No cell values are read
         # if any workbook is invalid, hidden or missing a selected worksheet.
-        for path, relative, tab, kind, header, tiered_mapping in paths:
+        for path, relative, tab, kind, header, tiered_mapping, row_labeled_mapping in paths:
             if path not in opened:
                 wb = load_workbook(
                     path, read_only=True, data_only=False, keep_links=False)
@@ -140,7 +148,7 @@ def inspect_selected_local_excel(*, root_dir, manifest, search=None):
             if worksheet.sheet_state != 'visible':
                 raise ValueError('hidden Excel tab cannot be scanned')
 
-        for path, relative, tab, kind, header, tiered_mapping in paths:
+        for path, relative, tab, kind, header, tiered_mapping, row_labeled_mapping in paths:
             ws = opened[path][tab]
             rows = [list(row) for row in ws.iter_rows(
                 min_row=1, max_row=MAX_ROWS, min_col=1,
@@ -158,6 +166,7 @@ def inspect_selected_local_excel(*, root_dir, manifest, search=None):
                 'document_type': kind,
                 'header_row': header,
                 'tiered_mapping': tiered_mapping,
+                'row_labeled_mapping': row_labeled_mapping,
                 'rows': rows,
             })
             origins.append({
