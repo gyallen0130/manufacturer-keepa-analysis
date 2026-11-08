@@ -50,10 +50,10 @@ def make_parser():
     parser = _SafeParser(
         description='Verify or copy an encrypted local backup; NO cloud access.',
         allow_abbrev=False)
-    sub = parser.add_subparsers(dest='operation', required=True)
+    sub = parser.add_subparsers(dest='operation', required=True,
+                                parser_class=_SafeParser)
     for name in ('verify', 'copy'):
-        command = sub.add_parser(name, parser_class=_SafeParser,
-                                 allow_abbrev=False)
+        command = sub.add_parser(name, allow_abbrev=False)
         command.add_argument('--source', required=True)
         command.add_argument('--public-keyring', required=True)
         command.add_argument('--trusted-keyring-sha256', required=True)
@@ -180,7 +180,10 @@ def perform_local_operation(
     # Only a 44-character URL-safe Fernet key is acceptable; never log it.
     if len(secret) != 44:
         raise ValueError('invalid recovery key')
-    key = secret.encode('ascii')
+    try:
+        key = secret.encode('ascii')
+    except UnicodeError:
+        raise ValueError('invalid recovery key') from None
     _cipher(key)  # validates before touching backup
 
     if options.operation == 'verify':
@@ -225,7 +228,7 @@ def main(argv=None, *, input_stream=None, error_stream=None,
             args,
             confirmation_reader=confirmation_reader or input,
             secret_reader=secret_reader or getpass.getpass)
-    except (OSError, PermissionError, ValueError, FileExistsError):
+    except (OSError, PermissionError, ValueError, EOFError):
         stderr.write(
             'Backup operation refused. Check keyring trust, storage protection, '
             'key, approvals and file integrity locally; details are hidden.\n')
