@@ -109,7 +109,7 @@ class OfferPackGuardTests(unittest.TestCase):
                                               retailer_offer(inner_boxes_per_offer=v))
 
     def test_reject_unknown_listing_source_and_invalid_quote(self):
-        for bad in ('amazon_api_trusted', '', None):
+        for bad in ('amazon_api_trusted', '', None, [], {}, True):
             with self.subTest(source=bad):
                 with self.assertRaises(ValueError):
                     evaluate_offer_pack_guard(manufacturer_quote(),
