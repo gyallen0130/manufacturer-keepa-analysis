@@ -73,6 +73,7 @@ def snapshots():
             'attribute.event_name': 'assertion.event_name',
             'attribute.workflow_ref': 'assertion.workflow_ref',
             'attribute.workflow_sha': 'assertion.workflow_sha',
+            'attribute.sha': 'assertion.sha',
             'attribute.repository_visibility': 'assertion.repository_visibility',
             'attribute.runner_environment': 'assertion.runner_environment',
         },
@@ -217,6 +218,15 @@ class PinnedGCPWIFTests(unittest.TestCase):
                     observed_github_repo=observed,
                     observed_provider=snapshots()[2],
                     observed_reader_iam_policy=snapshots()[3])
+
+    def test_unverified_billing_or_google_share_blocks_even_with_exact_trust(self):
+        for key in ('quota_and_billing_reviewed', 'reader_share_scope_reviewed',
+                    'provider_review_completed', 'private_state_store_reviewed'):
+            with self.subTest(key=key):
+                output = audit(settings_override={key: False})
+                self.assertEqual(
+                    output['status'], 'blocked_on_external_configuration_review')
+                self.assertFalse(output['actual_sheets_access_tested'])
 
     def test_branch_protection_is_separate_from_pinned_sha(self):
         result = audit(github_override={'default_branch_protected': True})
