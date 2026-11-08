@@ -63,6 +63,21 @@ python -m unittest -v tests.test_supplier_identity_matcher tests.test_supplier_i
 
 このテストは**架空のJAN/ASIN/原価・商品名**のみを使う。Google Drive/Keepa/SP-APIや秘密鍵は使わない。元の機密業務データをGitHub Actionsのログへ流す手順ではない。
 
+## 2つの「JAN」列と見積回答の記録（2026-11-08追加）
+
+同じExcelに`JAN`見出しが複数あっても、**どちらかを「正しいJAN」と機械的に選ばない**ために、[quote_jan_audit.py](quote_jan_audit.py)を新設した。
+
+`inspect_explicit_jan_columns(rows, header_row_index=2, request_jan_column=1, reply_jan_column=3, reply_note_columns=(3,4,5))`に、呼び出し側が**原本の列位置を明示**して渡す。引数名の「request」「reply」は暫定的な位置の役割名であり、契約上どちらが見積依頼か／正式回答かを認定するものではない。
+
+- **same_as_displayed**：2つのJAN欄の表示上の番号が一致。数値型のセルの場合は先頭0・表示形式が保証されないので商品確定ではない。
+- **different_as_displayed**：2列の表示番号が違う。**代替JANの提案／誤記／違う商品の可能性**を勝手に決めず確認対象にする。
+- **historical_unavailable_note**：「廃番」「取扱終了」などの語が指定した回答側の欄にある。**原本当時の記載**であり、現在の商品状態・在庫状態を保証しない。
+- **missing_or_unreadable**：必要な番号がない、形式不明など、同一商品確認ができない。
+
+集計の`public_summary`には件数と状態名だけを記録し、`private_row_evidence`には原本の1始まりの行番号と理由コードだけを持たせる。JAN・ASIN・原価・商品名をGitHubに保存しない。新しい結果から`attach_jan_audit_to_records(records, physical_row_numbers=[...], audit=...)`で**行番号を明示的に対応付けたコピー**へ`jan_source_ambiguous=True`を付ける。行が欠けた／順番不一致／重複した場合は拒否する。これにより既存の`identity_matcher`は曖昧な行を`strong_candidate`に上げない。
+
+この検証の根拠は[イトウの実原本比較（Private知識リポジトリ）](https://github.com/gyallen0130/amazon-business-knowledge/blob/main/suppliers/pilots/itou-jan-column-roles-2026-11-08.md)。**実原本で観察した構造をもとに設計し、プログラムの回帰テストは架空データのみで行った**。この新モジュールを実取引先のファイルへ本番自動適用したという意味ではない。GitHubのDraft PRのまま。
+
 ## 未実装・未確認
 
 - この関数は、既存 `on_demand_reader.inspect_manual_approved_sheets(...)` の戻り値に含まれる **`private_inspections[i]['tabs'][j]['records']`** を、許可済みの非公開処理から明示的に選んで呼べる。ただし自動選択・常時監視・商品同一性の最終確定は行わない。
