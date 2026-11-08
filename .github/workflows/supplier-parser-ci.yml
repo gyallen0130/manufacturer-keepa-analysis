@@ -19,15 +19,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Temporary public-code snapshot for private local validation
-        uses: actions/upload-artifact@v4
-        with:
-          name: public-supplier-parser-source-only
-          path: |
-            manufacturer_checker/supplier_docs/*.py
-            manufacturer_checker/requirements.txt
-          retention-days: 1
-          if-no-files-found: error
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
