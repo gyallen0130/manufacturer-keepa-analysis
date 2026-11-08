@@ -8,6 +8,12 @@ Google Driveのメーカー／卸問屋別フォルダにある見積書・商�
 
 `quote_jan_audit.summarize_jan_header_structure(header_row)` により、**商品セルを読まずに**「JAN列が見つからない／1列／複数列」を見分ける。1列の通常見積と、イトウのように依頼時・回答時のJAN欄が2つある資料を混同しない。これはオフラインの読取専用関数で、Driveの全社巡回や自動発注・自動価格判断には接続していない。
 
+## 追加：実4社の限定横断検索と未解析タブの扱い
+
+2026-11-08、**4社のGoogle Sheets実原本A1:O40についてChatGPTの接続を使った限定JAN/ASIN比較**を行い、対象行合計89・数値型JAN60・ASIN形式の行44を集計。限定範囲内の異なる卸問屋間で共通JAN/ASIN候補は0件だったが、**別タブ・未検索範囲を含めて不存在とは断定しない**。[匿名検証記録](https://github.com/gyallen0130/amazon-business-knowledge/blob/main/suppliers/pilots/four-supplier-live-cross-lookup-2026-11-08.md)を参照。**新Python接続部の実Google認証実行とは別**の実原本の一時検査。
+
+`multi_source_readonly.py`は、指定タブが空・見出し不明の場合に他タブの結果を残し、`source_status_counts`と検索対象外資料数を公開可能な集計として返すよう改修。[追加の回帰テスト](../tests/test_supplier_multi_source_readonly.py)で確認。GitHubへ実取引先のJAN/ASIN・価格や行データはコピーしない。
+
 ## 追加：事前選択したGoogle Sheetsを4社共通の解析器へ接続（開発用）
 
 [`sheets_multi_bridge.py`](sheets_multi_bridge.py)を追加。1～5の許可済みタブを列挙して**メタデータで存在/可視性を先に確認**し、A1:O40のみ`FORMULA`形式で読取、既存[`multi_source_readonly.py`](multi_source_readonly.py)に渡して正規化・限定横断検索する。検索条件を読取前にチェックし、単価列が複数ある場合は共通解析結果の`ambiguous_field_source_counts`に件数だけを残し、単価の自動採用をしない。
