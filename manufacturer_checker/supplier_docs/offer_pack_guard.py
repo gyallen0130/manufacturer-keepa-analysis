@@ -22,6 +22,35 @@ def _count(container, key):
     return value
 
 
+def mark_records_from_pack_guard(records, guard):
+    """Propagate unresolved pack identity into offline identity comparisons.
+
+    Never fills in missing product counts, changes original records or claims
+    a retailer mirror is the direct Amazon listing. No SKU or cost values
+    leave the process; caller chooses only the authorized input rows.
+    """
+    if (not isinstance(records, (list, tuple)) or len(records) > 200
+            or not all(isinstance(rec, dict) for rec in records)
+            or not isinstance(guard, Mapping)
+            or not isinstance(guard.get('public_summary'), Mapping)):
+        raise ValueError('invalid supplier pack review inputs')
+    status = guard['public_summary'].get('status')
+    allowed_statuses = frozenset({
+        'needs_amazon_offer_unit', 'needs_quoted_purchase_unit',
+        'confirmed_count_mismatch', 'potential_count_mismatch_secondary',
+        'apparent_count_match_secondary_unverified',
+        'count_match_identity_still_unverified',
+    })
+    if status not in allowed_statuses:
+        raise ValueError('unrecognized supplier pack review status')
+    needs_review = status != 'count_match_identity_still_unverified'
+    return [
+        {**row, 'offer_pack_review_required': True}
+        if needs_review else dict(row)
+        for row in records
+    ]
+
+
 def evaluate_offer_pack_guard(quote, listing):
     """Return private non-identifier evidence and a log-safe decision.
 
