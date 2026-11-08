@@ -64,7 +64,8 @@ def _run():
             dist = _distribution(name)
             if dist in found:
                 raise ValueError("duplicate resolved distribution")
-            digest = hashlib.file_digest(wheel.open("rb"), "sha256").hexdigest()
+            with wheel.open("rb") as handle:
+                digest = hashlib.file_digest(handle, "sha256").hexdigest()
             if not re.fullmatch(r"[0-9a-f]{64}", digest):
                 raise ValueError("invalid resolved wheel digest")
             found[dist] = f"{dist}=={version} --hash=sha256:{digest}"
