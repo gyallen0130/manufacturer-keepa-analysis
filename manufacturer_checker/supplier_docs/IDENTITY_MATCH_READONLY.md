@@ -122,6 +122,42 @@ assert guarded_rows[0]['offer_pack_review_required'] is True
 
 [17件の架空データテスト](../tests/test_supplier_offer_pack_guard.py)で2箱・4箱・単位不明・外部転載・単位一致・型異常・既存商品照合器への確認フラグ伝播を検証。原本取引データやAmazon認証はテストに不要。実調査の出典・保留事項は[共通知識側の記録](https://github.com/gyallen0130/amazon-business-knowledge/blob/main/suppliers/pilots/itou-amazon-packaging-risk-2026-11-08.md)に保管する。**現時点ではDraft PR内の開発部品で、本番ワークフローへは接続しない。**
 
+## 別日の販促メールの「ケース入数」と「単価」は見積の価格単位の証明ではない
+
+2026-11-08に業務用メールを読取検証した。対象のメーカー50枚入りマスクの別日付の案内で、`ケース入数50箱`と`単価`が記載されていたが、**2025年8月に依頼した別の見積の単価が「小箱1箱分」とは明記されていない**。
+
+`offer_pack_guard.quote_unit_from_document_evidence(evidence)`は、使用者が原本の来歴を確認した上で、**対象見積そのもの**の単価対象箱数が明確なときだけ`quote_unit_verified=True`の情報を渡す。それ以外は保留する。価格・JAN/ASIN・メールIDなどは返さない。
+
+```python
+from supplier_docs.offer_pack_guard import (
+    quote_unit_from_document_evidence, evaluate_offer_pack_guard,
+)
+
+# 別日の架空販促メールでは、その見積の単価が何箱分か分からない。
+provenance = quote_unit_from_document_evidence({
+    'scope': 'other_promotion',
+    'kind': 'case_pack_and_price_only',
+    'case_pack': 50,       # 倉庫・配送用のケース入数にすぎない
+})
+assert provenance['public_summary']['quote_unit_verified'] is False
+unknown_quote = {
+    'items_per_inner_box': 50,
+    **provenance['private_guard_quote'],
+}
+secondary_listing = {
+    'items_per_inner_box': 50,
+    'inner_boxes_per_offer': 4,
+    'source': 'secondary_listing',
+}
+risk = evaluate_offer_pack_guard(unknown_quote, secondary_listing)
+assert risk['public_summary']['status'] == 'needs_quoted_purchase_unit'
+assert risk['public_summary']['profit_calculation_allowed'] is False
+```
+
+`scope='target_quote', kind='explicit_per_retail_box'`を指定できるのは**その見積の単価対象箱数を実際に確認した場合のみ**である。過去の販促メール・ケース入数・Amazon情報の二次転載を単価1箱あたりの根拠へ昇格させてはならない。この関数は入力した情報が本物かをオンラインで照合せず、認証・メール取得・本番利益計算を行わない。
+
+[業務側の出所を区別した確認記録](https://github.com/gyallen0130/amazon-business-knowledge/blob/main/suppliers/pilots/itou-quote-unit-evidence-2026-11-08.md)。テストは架空情報だけ、実メール・仕入価格はPublic GitHubに保存しない。
+
 ## 未実装・未確認
 
 - この関数は、既存 `on_demand_reader.inspect_manual_approved_sheets(...)` の戻り値に含まれる **`private_inspections[i]['tabs'][j]['records']`** を、許可済みの非公開処理から明示的に選んで呼べる。ただし自動選択・常時監視・商品同一性の最終確定は行わない。
