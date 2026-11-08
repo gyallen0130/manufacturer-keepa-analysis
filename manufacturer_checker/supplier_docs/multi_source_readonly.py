@@ -50,7 +50,7 @@ def _check_specs(specs):
                 or not isinstance(file_id, str) or not _ID.fullmatch(file_id)
                 or not isinstance(sheet, str) or not 1 <= len(sheet) <= 128
                 or not isinstance(rows, (list, tuple))
-                or not 1 <= len(rows) <= MAX_ROWS_PER_SOURCE
+                or not 0 <= len(rows) <= MAX_ROWS_PER_SOURCE
                 or any(not isinstance(row, (list, tuple))
                        or len(row) > MAX_COLS_PER_ROW for row in rows)
                 or (header is not None and
@@ -77,23 +77,54 @@ def normalize_selected_sources(specs):
     normalized = []
     mapped_coverage = {}
     ambiguous_field_source_counts = {}
+    source_status_counts = {'parsed': 0, 'empty': 0, 'needs_review': 0}
     totals = {'records': 0, 'warnings': 0, 'rows_scanned': 0,
               'with_jan': 0, 'with_asin': 0, 'with_model': 0,
               'cost_present': 0, 'cost_tax_unknown': 0}
     for spec in specs:
         rows = spec['rows']
-        result = parse_rows(
-            rows, document_type=spec['document_type'],
-            source_file_id=spec['source_file_id'],
-            source_url=spec.get('source_url', ''),
-            source_sheet=spec['source_sheet'],
-            header_row=spec.get('header_row'),
-            max_rows=MAX_ROWS_PER_SOURCE,
-            include_sensitive=False,
-        )
+        totals['rows_scanned'] += len(rows)
+        if not rows or not any(
+                cell is not None and str(cell).strip()
+                for row in rows for cell in row):
+            status = 'empty'
+            result = None
+        else:
+            try:
+                result = parse_rows(
+                    rows, document_type=spec['document_type'],
+                    source_file_id=spec['source_file_id'],
+                    source_url=spec.get('source_url', ''),
+                    source_sheet=spec['source_sheet'],
+                    header_row=spec.get('header_row'),
+                    max_rows=MAX_ROWS_PER_SOURCE,
+                    include_sensitive=False,
+                )
+                status = 'parsed'
+            except ValueError as error:
+                # Only the documented no-header case is recoverable.
+                # Unexpected parsing failures must remain visible.
+                if str(error) != 'no reliable header: select document type or header_row':
+                    raise
+                status = 'needs_review'
+                result = None
+        source_status_counts[status] += 1
+        if result is None:
+            normalized.append({
+                'source_status': status,
+                'source_file_id': spec['source_file_id'],
+                'source_url': spec.get('source_url', ''),
+                'source_sheet': spec['source_sheet'],
+                'header_row': None,
+                'records': [],
+                'warnings': [],
+                'mapped_columns': {},
+                'summary': {'warning_count': 0},
+            })
+            continue
+        result['source_status'] = status
         records = result['records']
         normalized.append(result)
-        totals['rows_scanned'] += len(rows)
         totals['records'] += len(records)
         totals['warnings'] += result['summary']['warning_count']
         totals['with_jan'] += sum(bool(r['jan_string']) for r in records)
@@ -114,6 +145,8 @@ def normalize_selected_sources(specs):
     return {
         'public_summary': {
             'source_count': len(normalized),
+            'source_status_counts': source_status_counts,
+            'all_selected_windows_parsed': source_status_counts['parsed'] == len(normalized),
             'rows_scanned': totals['rows_scanned'],
             'record_count': totals['records'],
             'warning_count': totals['warnings'],
@@ -201,6 +234,8 @@ def search_selected_sources(normalized, *, field, query):
     return {
         'public_summary': {
             'sources_searched': len(docs),
+            'sources_with_parsed_headers': sum(d.get('source_status', 'parsed') == 'parsed' for d in docs),
+            'sources_not_searchable': sum(d.get('source_status', 'parsed') != 'parsed' for d in docs),
             'records_examined': examined,
             'hits_returned': len(hits),
             'results_truncated': matches_capped,
