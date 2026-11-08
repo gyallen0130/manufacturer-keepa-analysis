@@ -18,10 +18,10 @@ ACTIONS = {
 }
 _MAX_WORKFLOW = 30000
 _ACTION_LINE = re.compile(
-    r"^\s*-\s+uses:\s*([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@"
+    r"^\s*(?:-\s*)?uses:\s*([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@"
     r"([0-9a-f]{40})(?:\s+#.*)?$", re.MULTILINE
 )
-_ANY_USES = re.compile(r"^\s*-\s+uses:\s*(.+)$", re.MULTILINE)
+_ANY_USES = re.compile(r"^\s*(?:-\s*)?uses:\s*(.+)$", re.MULTILINE)
 
 
 def review_private_workflow_template(text):
