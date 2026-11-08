@@ -141,6 +141,14 @@ GitHub Billingについては、現行の無料枠を**当月の共有ドル建�
 
 設計の詳細・留意事項：[`PRIVATE_GITHUB_STATE.md`](PRIVATE_GITHUB_STATE.md)。この方式の導入は所有者承認後に限定します。新規有料ストレージ・Cloud Run・Scheduler・Secret Managerを前提にしません。
 
+## GitHubから必要時にGoogle Sheetsを読み取る入口（開発版・未接続）
+
+`on_demand_reader.py` は**私的な許可リストをもとに最大3 Google Sheets／合計7,200セル**の明示指定タブだけを読み取り、メーカー資料・商品・JAN・ASIN・卸値などの解析結果を**プログラム内部の機密戻り値**へ保持します。公開してよいのは別に返される匿名の件数サマリーだけです。Drive全体のフォルダ検索・原本の編集・更新状態の自動確定・自動発注はありません。
+
+`manual_sheet_probe.py` は**承認済みのPrivate GitHub Actionsで手動起動する想定**の実行入口。非公開リポジトリ／mainブランチ／特定workflow／`workflow_dispatch`／Google WIF資格情報の条件がそろわなければ拒否します。API失敗時の例外・取引先データをGitHubログに表示しません。Google側WIF providerにも不変のリポジトリID・所有者ID・workflow等の条件が必要で、**実WIF認可やPrivate Repoへの配置はまだ行っていません**。
+
+プライベート専用リポジトリへの**未設置テンプレート**は `templates/supplier-readonly.yml`。詳細と残る課題は[`ON_DEMAND_PRIVATE_GITHUB.md`](ON_DEMAND_PRIVATE_GITHUB.md)を参照してください。現時点のActionsログは匿名件数のみで、**詳細なメーカー資料をユーザーやChatGPTがGitHub経由で取得できる配信先は未実装**です。
+
 ## 追加月額費用を避ける設計（最優先、未デプロイ）
 
 取引先資料の自動化は**新たな固定費や課金可能なクラウドリソースを既定にしない**方針です。以下の既存の無料・契約内の選択肢を先に評価します。
