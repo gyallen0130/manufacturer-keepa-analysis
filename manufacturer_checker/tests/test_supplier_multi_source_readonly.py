@@ -237,7 +237,7 @@ class CrossSupplierReadOnlyTests(unittest.TestCase):
         examples[1]['rows'] = []
         result = normalize_selected_sources(examples)
         self.assertEqual(result['public_summary']['source_status_counts'],
-                         {'parsed': 3, 'empty': 1, 'needs_review': 0})
+                         {'parsed': 3, 'empty': 1, 'needs_review': 0, 'mapped_review': 0})
         self.assertFalse(result['public_summary']['all_selected_windows_parsed'])
         self.assertEqual(result['private_normalized_docs'][1]['records'], [])
         hit = search_selected_sources(result, field='model', query='TEST-M001')
