@@ -139,7 +139,7 @@ class ReviewGateTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.plan([{**good, 'reviewed_at_utc': '2026-99-90T09:30:00Z'}])
         with self.assertRaises(ValueError):
-            self.receipt(SHEET, evidence='not_valid')
+            self.receipt(SHEET, evidence='bad')
         with self.assertRaises(ValueError):
             self.receipt(SHEET, evidence=' ' * 20)
 
