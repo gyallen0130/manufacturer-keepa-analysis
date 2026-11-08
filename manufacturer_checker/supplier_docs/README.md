@@ -99,6 +99,31 @@ document-type は manufacturer_list / quote_request / quote_response / catalog /
 
 **重要な未実装範囲**：HMAC署名は、独立管理した署名鍵の保有を確認するものです。署名だけで本人確認や実際に人が資料を確認したことを証明できるわけではありません。承認画面の認証と権限管理、署名鍵と暗号化鍵の別々の安全な保管、書き込みロック・バックアップ・監査ログの耐改ざん保管は実運用前に必要です。現時点では架空データによる自動テストのみで、仕入れ承認・購入・本番ワークフローには接続していません。
 
+## 将来のGoogle Cloud実行構成（未デプロイ）
+
+Cloud Run **Job** + Cloud Scheduler + Secret Manager + 非公開Cloud Storageの構成を候補とします。現時点では**設計と開発用アダプタのみ**で、Google CloudにJob・バケット・Secret・Schedulerを作成したわけではありません。既存のSP-API用Cloud Run Job、サービスアカウント、スケジューラ、GCSを変更する手順は含みません。
+
+- `supplier-docs-worker`（将来のJob実行用SA）: 原本の読み取りと差分候補作成のみ。専用の `supplier-docs-reader` サービスアカウント**単体**へのToken Creatorを付与して代理認証し、Drive metadata readonlyとSheets readonlyの**それぞれ別の短命トークン**を利用する想定。対象フォルダへのViewer共有が別途必要です。**既存SP-API用SAは利用しません**。
+- `supplier-docs-review`（将来の認証済みレビューサービス用SA）: 人による実確認・承認記録の発行を担当。HMAC署名用Secretはこのサービスのみが閲覧します。レビューの本人認証・監査ログは未実装。
+- `supplier-docs-trigger`（将来のScheduler用SA）: 指定したSupplier Jobを起動する権限だけを持つ。Google APIのジョブ実行URLにはOAuthトークンを使います。**現時点ではスケジューラを作成・有効化しません**。
+- `supplier-docs-state-...`（専用のPrivate GCSバケット）: 暗号化した `supplier-docs/inventory.enc` と `supplier-docs/review-journal.enc` を永続化する候補。既存のSP-API用バケットには書き込みません。GCS世代の一致（`if_generation_match`）を必須にして、初回は0、更新は直前に取得した世代番号を指定します。公開アクセス防止、バージョニング、最小権限IAM、バックアップ・復元計画は導入前に要確認。
+- Secret Managerの**3つの別々のSecret**: インベントリ暗号鍵（Workerのみ）、レビュー記録暗号鍵（Reviewerのみ）、署名鍵（Reviewerのみ）。アクセス権は**各Secret単体**に付与し、バージョンを明示します。実鍵はコード、GitHub Actions、Colab、標準ログに保存しません。
+
+### 開発中の安全制御
+
+- `supplier_docs.cloud_runtime.validate_supplier_cloud_runtime` は非公開の配置案を**ネットワークアクセスなし**で検査します。Job・SA・バケットがSupplier専用であること、役割分離、Secret3個の分離と版固定、`dry_run`、スケジュール無効、単一並列、リトライ0、原本ログ無効、レビュー自動承認無効、Drive再帰探索無効を要求します。結果は匿名のチェック項目だけです。
+- `supplier_docs.auth.build_readonly_drive_metadata_service` は既存のSheets認証とは分離した `drive.metadata.readonly` の15分代理トークンを使います。Drive API有効化や実フォルダ共有は**まだ実施していません**。
+- `supplier_docs.cloud_state` は呼び出し元が明示的に渡した専用GCS Blobのみに暗号化した状態をアップロード・ダウンロードします。GCS世代前提条件で他の実行による上書き競合を防ぎ、未許可のバケット名・オブジェクト名は拒否します。**実GCSへの接続テストは未実施**。
+- インベントリとレビュー記録は**別々のGCSオブジェクト**のため、両方をまとめて更新するトランザクションではありません。導入前に単一実行保証、障害時の復旧、鍵ローテーション、暗号文のバックアップ、レビュー監査証跡を設計・検証します。
+
+### Google公式資料（将来の導入時に再確認）
+
+- [Cloud Run JobのサービスID](https://docs.cloud.google.com/run/docs/configuring/jobs/service-identity)
+- [Cloud Run JobのSecret管理](https://docs.cloud.google.com/run/docs/configuring/jobs/secrets)
+- [Secret ManagerのSecret単位IAM](https://docs.cloud.google.com/secret-manager/docs/access-control)
+- [Cloud Storageの世代前提条件](https://docs.cloud.google.com/storage/docs/request-preconditions)
+- [Cloud Run JobをSchedulerで実行](https://docs.cloud.google.com/run/docs/execute/jobs-on-schedule)
+
 ## 安全なAPI接続の試運転
 
 上の鍵なし代理認証手順に従い、まず1シートの40行以内だけを `--summary-only` で試験してください。サービスアカウントはViewer権限のみ、トークンは15分の `spreadsheets.readonly` スコープです。
