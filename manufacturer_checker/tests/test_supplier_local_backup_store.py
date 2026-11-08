@@ -152,7 +152,7 @@ class LocalBackupTests(unittest.TestCase):
         self.assertFalse(self.path.exists())
 
     def test_network_share_is_never_a_local_backup_destination(self):
-        remote = r'\\\\example.invalid\\private-backup\\supplier.enc'
+        remote = r'\\example.invalid\private-backup\supplier.enc'
         with self.assertRaises((ValueError, PermissionError, OSError)):
             self.save(path=remote)
 
