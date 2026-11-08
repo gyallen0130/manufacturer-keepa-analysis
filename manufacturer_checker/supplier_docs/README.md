@@ -46,6 +46,18 @@ document-type は manufacturer_list / quote_request / quote_response / catalog /
 - 返すのはタブ順の番号・件数・リスクコード等だけです。タブ名、原価、JAN、ASIN、商品名、原本IDは集計結果に含めません。
 - 現時点では**Pythonライブラリの開発用機能**です。既存のColab試運転やGitHub Actions本番ワークフローから自動実行するようには変更していません。実データでの複数シート一括実行は未検証です。
 
+## Google Driveの更新差分検出（開発用、未接続）
+
+`supplier_docs.drive_delta` に**メタデータだけ**を使った読み取り専用の差分検出部品を追加しました。Drive v3 の `files.list` で、利用者が明示的に許可したフォルダの**直下**だけを、ページ数・件数の上限付きで確認します。`name`（ファイル名）や原本の本文、共有権限は取得対象に含めません。
+
+- `scan_approved_folder(service, folder_id=...)`: 1フォルダの完全なメタデータ一覧（ファイルID、MIMEタイプ、更新版番号／更新時刻）を、上限10ページ・500件で取得。**子フォルダは開かず**件数だけを集計。
+- `scan_explicit_folder_set(service, folder_ids=[...])`: **承認済みIDを明示列挙**した複数フォルダを対象にする。既定上限は160フォルダ・240ページ・10,000項目。指定外のフォルダを探索したり、My Drive全体を検索したりしません。途中の失敗・取得漏れがあれば全体を不採用。
+- `plan_changed_files(previous, current)` / `plan_explicit_folder_set(previous, current)`: 完全な2回分の一覧を比較し、初回は**基準点のみ**作成。2回目以降、新規・更新・不変・見えなくなったファイルを区別。アクセスが消えた／移動した可能性があるファイルは**削除せず要確認**とします。
+- IDを含む一覧と作業候補は**機密情報**です。戻り値の `summary` だけを集計共有し、ID・フォルダ名・生のメタデータをGitHubや公開ログへ保存しないでください。
+- まだスケジューラ、認証、永久保存、資料の実ダウンロードや自動解析とは**接続していません**。これらの関数は外部処理を自動起動しません。実資料への `files.list` 実行も未実施です。
+
+**実運用前の追加条件**：現時点の専用サービスアカウントには *Google Sheets 2ファイルへのViewer共有* しかありません。Driveフォルダの巡回には所有者の明示的な許可が必要で、Drive APIの有効化、鍵なしの **Drive metadata readonly** スコープ（`https://www.googleapis.com/auth/drive.metadata.readonly`）と、**許可した対象フォルダの閲覧権限**を別途準備する必要があります。既存の `spreadsheets.readonly` だけではDriveのフォルダ一覧取得はできません。フォルダ全体を安易に共有せず、承認済みの対象範囲を明文化してから実装します。
+
 ## 安全なAPI接続の試運転
 
 上の鍵なし代理認証手順に従い、まず1シートの40行以内だけを `--summary-only` で試験してください。サービスアカウントはViewer権限のみ、トークンは15分の `spreadsheets.readonly` スコープです。
@@ -87,10 +99,10 @@ document-type は manufacturer_list / quote_request / quote_response / catalog /
 ## テスト
 
     cd manufacturer_checker
-    python -m unittest discover -s tests -p 'test_supplier_docs.py' -v
+    python -m unittest discover -s tests -p 'test_supplier_*.py' -v
 
 異なる列順・複数ASIN・ケース条件を架空データで検証しています。テストはすべて架空データです。実際の取引先・仕入価格・Drive IDはコードに含めません。
 
 業務上の項目定義は非公開の amazon-business-knowledge/suppliers/field-schema.md を参照してください。公開リポジトリから直接参照・取得できるとは限りません。
 
-**実Google Sheetsとの照合（2026-11-08）**：`FORMATTED_VALUE` の返却値は数値JANも文字列として返すため、数値セルから先頭0が失われているか判定できません。`FORMULA` に変更して生の数値型を保持し、式は文字列として処理・不採用とします。実資料の金額・原文をGitHubに保存しないでください。その後、専用サービスアカウントによるGoogle Colabからの実接続と先頭40行の読み取り・集計（39件）は成功しました。ただし、列推定機能を含む更新後の実データ再検証は未実施です。
+**実Google Sheetsとの照合（2026-11-08）**：`FORMATTED_VALUE` の返却値は数値JANも文字列として返すため、数値セルから先頭0が失われているか判定できません。`FORMULA` に変更して生の数値型を保持し、式は文字列として処理・不採用とします。実資料の金額・原文をGitHubに保存しないでください。その後、専用サービスアカウントによるGoogle Colabからの実接続と先頭40行の読み取り・集計（39件）は成功しました。その後、列推定機能の更新後も井上のColab再テスト成功、ワコーフーズについても専用SAで29件を解析し、重複する卸値列・複数ASIN候補を正しく保留しました。**手動の接続テストは2社分完了**しました。Driveのメタデータ差分検出は合成データのみで検証済みです。
