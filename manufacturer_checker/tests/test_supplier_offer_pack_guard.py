@@ -2,7 +2,7 @@
 import json
 import unittest
 
-from supplier_docs.offer_pack_guard import evaluate_offer_pack_guard, mark_records_from_pack_guard
+from supplier_docs.offer_pack_guard import (evaluate_offer_pack_guard, mark_records_from_pack_guard, quote_unit_from_document_evidence)
 
 
 def manufacturer_quote(**extra):
@@ -175,6 +175,74 @@ class OfferPackGuardTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             mark_records_from_pack_guard([{}] * 201,
                                          evaluate_offer_pack_guard(manufacturer_quote(), retailer_offer()))
+
+
+    def test_historical_other_email_case_pack_not_quote_unit_proof(self):
+        evidence = {'scope': 'other_promotion',
+                    'kind': 'case_pack_and_price_only',
+                    'case_pack': 50, 'price': 275,
+                    'source_id': 'PRIVATE_GMAIL_MESSAGE'}
+        result = quote_unit_from_document_evidence(evidence)
+        self.assertEqual(result['public_summary']['status'],
+                         'related_promotion_cannot_verify_quote_unit')
+        self.assertFalse(result['public_summary']['quote_unit_verified'])
+        self.assertIsNone(result['private_guard_quote']['inner_boxes_per_quoted_unit'])
+        self.assertNotIn('PRIVATE_GMAIL_MESSAGE', json.dumps(result))
+        self.assertNotIn('275', json.dumps(result))
+
+    def test_same_quote_case_pack_and_price_is_still_not_explicit_unit(self):
+        evidence = quote_unit_from_document_evidence({
+            'scope': 'target_quote', 'kind': 'case_pack_and_price_only',
+            'retail_boxes_per_quoted_price': 1})
+        self.assertFalse(evidence['public_summary']['quote_unit_verified'])
+        self.assertIsNone(evidence['private_guard_quote']['inner_boxes_per_quoted_unit'])
+
+    def test_explicit_unit_only_on_target_quote_may_propagate(self):
+        evidence = quote_unit_from_document_evidence({
+            'scope': 'target_quote',
+            'kind': 'explicit_per_retail_box',
+            'retail_boxes_per_quoted_price': 1})
+        self.assertTrue(evidence['public_summary']['quote_unit_verified'])
+        self.assertEqual(evidence['private_guard_quote']['inner_boxes_per_quoted_unit'], 1)
+        # Original manufacturer retail box contents must be confirmed
+        # independently before this non-profit pack guard can compare.
+        quote = {'items_per_inner_box': 50,
+                 **evidence['private_guard_quote']}
+        pack = evaluate_offer_pack_guard(quote, retailer_offer())
+        self.assertEqual(pack['public_summary']['status'],
+                         'potential_count_mismatch_secondary')
+        self.assertFalse(pack['public_summary']['profit_calculation_allowed'])
+
+    def test_explicit_other_promotion_is_not_current_quote_proof(self):
+        evidence = quote_unit_from_document_evidence({
+            'scope': 'other_promotion',
+            'kind': 'explicit_per_retail_box',
+            'retail_boxes_per_quoted_price': 1})
+        self.assertFalse(evidence['public_summary']['quote_unit_verified'])
+
+    def test_unverified_source_does_not_fabricate_box_counts(self):
+        evidence = quote_unit_from_document_evidence({})
+        self.assertEqual(evidence['public_summary']['status'],
+                         'quote_price_unit_not_verified')
+        guard = evaluate_offer_pack_guard(
+            {'items_per_inner_box': 50, **evidence['private_guard_quote']},
+            retailer_offer())
+        self.assertEqual(guard['public_summary']['status'],
+                         'needs_quoted_purchase_unit')
+
+    def test_reject_invalid_quote_source_and_box_units(self):
+        for bad in (True, [], {}, None, 'imaginary'):
+            with self.subTest(value=repr(bad)):
+                with self.assertRaises(ValueError):
+                    quote_unit_from_document_evidence({
+                        'scope': bad, 'kind': 'case_pack_and_price_only'})
+        for count in (True, 0, 1.5, '1', -1, 10001):
+            with self.subTest(count=repr(count)):
+                with self.assertRaises(ValueError):
+                    quote_unit_from_document_evidence({
+                        'scope': 'target_quote',
+                        'kind': 'explicit_per_retail_box',
+                        'retail_boxes_per_quoted_price': count})
 
 
 if __name__ == '__main__':
