@@ -99,6 +99,25 @@ document-type は manufacturer_list / quote_request / quote_response / catalog /
 
 **重要な未実装範囲**：HMAC署名は、独立管理した署名鍵の保有を確認するものです。署名だけで本人確認や実際に人が資料を確認したことを証明できるわけではありません。承認画面の認証と権限管理、署名鍵と暗号化鍵の別々の安全な保管、書き込みロック・バックアップ・監査ログの耐改ざん保管は実運用前に必要です。現時点では架空データによる自動テストのみで、仕入れ承認・購入・本番ワークフローには接続していません。
 
+## 追加月額費用を避ける設計（最優先、未デプロイ）
+
+取引先資料の自動化は**新たな固定費や課金可能なクラウドリソースを既定にしない**方針です。以下の既存の無料・契約内の選択肢を先に評価します。
+
+- **既存GitHub Actions**：検査や解析は標準Runnerを再利用。公開Repoではコード・架空データのCIのみとし、機密の仕入価格・取引先名・認証情報・ファイルIDを公開ログ・リポジトリ・Artifactへ保存しない。Private Repoの無料実行枠は所有者アカウント全体の利用と課金設定の確認が必要。
+- **Google Apps Script**：Driveの少数の承認済みフォルダの更新検出・通知だけを限定実行する案。別途クラウドJobを作らずに済む可能性はあるが、ユーザー承認、Driveへの広い権限のリスク、実行時間やProperties容量などの制限を先に検証する。
+- **既存の非公開保存先**：前回からの差分や秘密の更新履歴は、別途権限を確認したPrivate Drive等への保存を検討。公開コードに暗号化済みの原本IDを無造作に置いたり、CIの一時Artifactへ長期保存したりしない。
+- **オフライン公開鍵レビュー**：`offline_review.py` は信頼済みのレビュー端末だけがEd25519の秘密鍵で署名し、解析ワーカーは公開鍵だけで署名の真偽と対象の更新版を確認する**試験実装**。これにより、レビュー署名用の課金サービスやSecret Managerの新規Secretを必須にしない選択肢が生まれる。本人認証・鍵管理・証跡保存・承認UIは未整備。
+- **費用ガード**：`cost_first.evaluate_cost_first_plan` は課金リスクが残る新規サービスを所有者の明示承認なしで禁止し、無料枠や機密保存先が未確認なら設計のみで停止する。これは金額や課金状態を実際に検証するプログラムではない。
+
+先に提案したCloud Run Job、Cloud Scheduler、2つのGCSバケット、3つのSecret Manager Secretは**候補のまま保留**します。無料試用クレジットには依存せず、ランニングコスト・手間・セキュリティ・実行安定性を比較して必要な場合だけ採用します。既存のAmazon SP-API自動化環境には手を加えません。
+
+公式資料：
+- [GitHub Actions利用料金](https://docs.github.com/en/billing/concepts/product-billing/github-actions)
+- [GitHubプランと無料枠](https://github.com/pricing)
+- [GitHub Actions scheduleの制約](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)
+- [Google Apps Scriptの割り当て](https://developers.google.com/apps-script/guides/services/quotas)
+- [Cloud Storage Always Freeの対象リージョン](https://cloud.google.com/storage/pricing)
+
 ## 将来のGoogle Cloud実行構成（未デプロイ）
 
 Cloud Run **Job** + Cloud Scheduler + Secret Manager + 非公開Cloud Storageの構成を候補とします。現時点では**設計と開発用アダプタのみ**で、Google CloudにJob・バケット・Secret・Schedulerを作成したわけではありません。既存のSP-API用Cloud Run Job、サービスアカウント、スケジューラ、GCSを変更する手順は含みません。
