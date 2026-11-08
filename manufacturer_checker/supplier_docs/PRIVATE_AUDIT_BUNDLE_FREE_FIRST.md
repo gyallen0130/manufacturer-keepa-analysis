@@ -20,8 +20,8 @@
 
 ## GitHub無料枠の判定（実数は未取得）
 
-- GitHub FreeのPrivate Repoの利用目安は**2,000 Actions分/月**。アカウントの他のPrivate Repoでの実行と共有する。プランや請求方式・使用量によって実際の残枠は変わる。
-- `actions_budget_guard.assess_private_actions_allowance` は**所有者がGitHub Billingから確認した数値**を受け取り、実行上限と**最低120分の予備**を差し引くドライラン評価。例：月30回×1回最大5分なら最大150分。残り無料枠が不明、使用数値が当月以外、予備を割り込む、課金停止ルールやシークレット管理が未確認の場合は**導入候補を保留**。
+- **2026-11-08に再確認したGitHub公式料金**：GitHub FreeのPrivate Repoは、固定の2,000分ではなく**月12 USDの共有コンピュートクレジット**として案内されている。ランナー単価と他Repo・Cloud Sandboxの利用によって残額が変わる。旧2,000分前提は使用禁止。
+- `actions_budget_guard.assess_private_actions_allowance` は**所有者がGitHub Billingで確認した当月のドル建て残クレジット・使用済み額・適用ランナー単価**を用いる。月30回×最大5分＝最大150分の計画で、例として0.006 USD/分なら**見積0.90 USD**（単価は要確認）。**最低1 USDの予備**、支出停止ルール、Private RepoのSecret管理とストレージ料金を確認できなければ利用開始を保留する。実際の請求／残クレジットは取得していない。
 - 現在のGitHubコネクタにはこのアカウントのActions請求残時間を取得する専用操作がないため、**実際の使用量は未確認**。予算の「上限に達したら使用を停止する」設定を確認するまで、自動処理を有効にしない。既存ワークフローまで止まる可能性があるので、**予算設定自体も無断変更しない**。
 - Free privateリポジトリで別途のEnvironment secretsが使えることを前提にした構成・GitHub Pro等の契約は**提案しない**。必要なら追加料金と無料代替を比較した上で別途承認を求める。
 
@@ -38,8 +38,13 @@
 ## 公式の確認資料
 
 - https://docs.github.com/en/billing/reference/product-usage-included
+- https://docs.github.com/en/billing/concepts/product-billing/github-actions
 - https://docs.github.com/en/actions/concepts/billing-and-usage
 - https://docs.github.com/en/billing/how-tos/set-up-budgets
 - https://docs.github.com/en/actions/concepts/security/secrets
 - https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments
 - https://docs.github.com/en/rest/repos/contents
+
+## 有料サービスを使わないオフライン復旧コピー（開発用）
+
+`offline_recovery_archive.py` は、署名済みレビュー履歴を全て再検証し、**通常のFernet暗号鍵とは異なる復旧用鍵**で暗号化し直したバックアップのバイト列を返す。実ファイルの書込・GitHub APIへの操作はしない。復元には復旧用鍵と登録済みのEd25519公開鍵が必要。**元の暗号鍵を失っても復旧用鍵が残っていれば新しい通常鍵で再暗号化できる**。復旧の結果はあくまで未アップロードの暗号文であり、GitHubの現在版・Driveの最新更新版・過去の監査と差分を担当者が確認するまでは上書き禁止。バックアップと復旧鍵を**別々の保護された場所**に置くことを前提とする。実データのバックアップ作成は未実施。
