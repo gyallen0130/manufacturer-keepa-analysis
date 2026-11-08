@@ -1,5 +1,9 @@
 # 卸問屋横断の共通正規化・照会MVP（2026-11-08／開発用）
 
+## 最新の共通機能：多段見出しを明示的に限定マッピング
+
+[複数行見出しの明示マッピング手順](TIERED_HEADER_MANUAL.md)を追加。Excel/Google Sheets双方で`tiered_mapping`マニフェストを**読取前に検証**し、2～4行の見出し座標から**独立ラベルと一致する商品識別子だけ**を`mapped_review`として抽出できる。従来の`needs_review`・`parsed`とは区別する。`cost_amount`／ケース入数／税区分は不可、価格が原本にあっても`cost_present=false`・利益計算禁止。**実LeadOffの混合POS/ITF見出しはまだ安全上保留**。テストは架空データ17件、実原本の新たな人手マッピングE2Eは未実施。
+
 ## 最新検証：開発用Excelブリッジの実原本E2Eに成功
 
 2026-11-08、**4卸問屋・指定5シート（各A1:O40）**を`local_excel_bridge.inspect_selected_local_excel`本体で読んで`multi_source_readonly.normalize_selected_sources`へ渡す**私的な実原本試験を完了**。3シート解析・2シート多段見出し`needs_review`。ブラックス`.xlsx`のケースでは52商品候補・数式45件、`.xlsm`のケースでは60候補・数式117件。**値を載せず件数だけ報告**し、JANとASINの限定完全一致検索を各1件試験。**原本ハッシュは全件一致**。異なる卸同士の同一商品確定や全行の読み込みではない。詳しい匿名証跡：[Private Repoの実E2E記録](https://github.com/gyallen0130/amazon-business-knowledge/blob/main/suppliers/pilots/four-supplier-real-excel-e2e-2026-11-08.md)。
