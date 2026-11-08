@@ -72,6 +72,8 @@ def _safe_path(path, *, storage_reviewed, private_parent):
     elif os.name != 'posix':
         raise OSError('unsupported local filesystem')
     parent = p.parent
+    if not parent.is_dir():
+        raise ValueError('local private folder must exist before use')
     for item in (parent, *parent.parents):
         info = item.lstat()
         if (not stat.S_ISDIR(info.st_mode)
