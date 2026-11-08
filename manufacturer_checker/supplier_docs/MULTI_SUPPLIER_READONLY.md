@@ -1,3 +1,6 @@
+## 追加：既存の認証済みSheetsとExcelを同時解析する入口
+[認証済みSheets／Excelの一括読取手順](AUTHORIZED_MIXED_READONLY.md)と[`authorized_mixed_probe.py`](authorized_mixed_probe.py)を追加。実行するPrivate側で**予め権限が付与されたSheets v4読取専用サービス**を用意し、Excel/Sheetsの両マニフェストの安全検証→私的Excel読取→Google Sheets限定読取→共通JAN等検索の順に処理する。**認証情報の作成・本番IAMの変更は一切しない**。8件の架空データテストが成功しても**実API認証E2E完了とは扱わない**。
+
 # 卸問屋横断の共通正規化・照会MVP（2026-11-08／開発用）
 
 ## 最新：POS/ITFの実Excel検証、Excel/Sheets検索結果のPrivate統合
