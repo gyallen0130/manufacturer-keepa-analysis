@@ -1,0 +1,54 @@
+# TEMPLATE ONLY: copy into a REVIEWED PRIVATE repository as:
+# .github/workflows/supplier-readonly.yml
+# NOT active in this public development repository.
+# Do NOT enable until Google-side WIF conditions, IAM, billing, workflow
+# integrity and private secret handling have been independently reviewed.
+name: Supplier manual Sheets read - PRIVATE ONLY
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supplier-manual-readonly
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      github.event.repository.private == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      SUPPLIER_REPO_PRIVATE: ${{ github.event.repository.private }}
+      SUPPLIER_READ_MANIFEST_JSON: ${{ secrets.SUPPLIER_READ_MANIFEST_JSON }}
+    steps:
+      - name: Check out pre-reviewed private workflow code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Use Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install bounded read-only dependencies
+        run: |
+          python -m pip install 'google-api-python-client>=2,<3' 'google-auth>=2,<3'
+          python -m pip install 'cryptography>=42,<47'
+      - name: Authenticate with approved Google-side WIF provider
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.SUPPLIER_WIF_PROVIDER }}
+          service_account: ${{ vars.SUPPLIER_READER_SA }}
+          create_credentials_file: true
+          export_environment_variables: true
+      - name: Inspect approved Sheets (redacted counts ONLY)
+        working-directory: manufacturer_checker
+        run: python -m supplier_docs.manual_sheet_probe
