@@ -127,4 +127,4 @@ jobs:
         env:
           KEEPA_API_KEY: ""
           DRIVE_PARENT_FOLDER_ID: ""
-        run: python -m unittest discover -s tests -p test_supplier_local_backup_store.py -v
+        run: python -m unittest discover -s tests -p 'test_supplier_local_backup*.py' -v
