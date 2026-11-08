@@ -13,6 +13,7 @@ import re
 from .drive_delta import FILE_ID
 from .multi_source_readonly import (
     MAX_SOURCES, normalize_selected_sources, search_selected_sources,
+    validate_source_lookup,
 )
 from .parser import DOCUMENT_TYPES
 from .readers import sheets_values, sheets_visible_tabs
@@ -77,6 +78,10 @@ def inspect_selected_google_sheets(sheets_service, *, manifest, search=None):
     Private results must NEVER be stored in public CI logs or GitHub.
     """
     planned = validate_multi_sheet_manifest(manifest)
+    if search is not None:
+        if not isinstance(search, dict) or set(search) != {'field', 'query'}:
+            raise ValueError('invalid selected cross-supplier search')
+        validate_source_lookup(search['field'], search['query'])
 
     # Preflight ALL tab visibility before reading any cells.
     # Reuse metadata for the same spreadsheet so queries remain bounded.
@@ -87,16 +92,6 @@ def inspect_selected_google_sheets(sheets_service, *, manifest, search=None):
                 sheets_service, spreadsheet_id=file_id, max_tabs=100)
         if title not in visible_by_file[file_id]:
             raise ValueError('selected sheet is missing or hidden')
-
-    # The query is PRIVATE. Validate before reading values to avoid
-    # unnecessary access on malformed search requests.
-    if search is not None:
-        if (not isinstance(search, dict)
-                or set(search) != {'field', 'query'}
-                or not isinstance(search['field'], str)
-                or not isinstance(search['query'], str)
-                or len(search['query']) > 120):
-            raise ValueError('invalid selected cross-supplier search')
 
     specs = []
     formulas = 0
