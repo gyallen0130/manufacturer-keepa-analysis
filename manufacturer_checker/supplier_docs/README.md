@@ -159,6 +159,16 @@ WindowsのNTFS ACL／BitLocker／同期フォルダの有無は**プログラム
 
 **これは機密の転送を可能にする部品で、最終的なユーザー参照画面ではありません。** 利用者自身の秘密鍵の安全な発行・保管・ローカル復号手順と、ChatGPTが必要なデータを安全に参照する権限付きチャネルはまだ未完成。詳しくは[`OWNER_ENCRYPTED_RESULT_DELIVERY.md`](OWNER_ENCRYPTED_RESULT_DELIVERY.md)を参照してください。
 
+## WIFの実設定取得・依存固定の導入前ゲート（未実行）
+
+`gcloud_wif_readback.py` は**所有者が明示的に読み取りを承認した場合だけ**、信頼できるローカル端末の既存Google Cloud CLIから**専用WIFプロバイダーの`describe`とReader SAの`get-iam-policy`のみ**を実行する開発部品です。Google Cloudの設定変更・OIDCトークン発行・GitHub workflow起動はありません。実際の`gcloud`はまだ実行しておらず、現在はすべて架空のJSON応答でテストしています。
+
+別途、未設置の`templates/supplier-readonly.yml`を改修し、外部4 Actionsを**公式GitHubの該当タグから確認した40桁コミットSHAに固定**しました。`private_workflow_integrity.py`が手動Private実行、狭いGITHUB_TOKEN権限、暗号化Artifactだけの保存と依存ライブラリのハッシュ固定を検査します。
+
+**現在のテンプレートはPythonライブラリのハッシュ付き依存ロックが未完成のため、意図的に「本番導入不可」を返します。** 監査対象の固定依存と、実Private Repo、GitHub請求・GCP WIFの確認が揃うまで実データへのGitHub経由接続は開始しません。
+
+詳しい手順・残る課題は[`GCLOUD_READONLY_AND_WORKFLOW_GATE.md`](GCLOUD_READONLY_AND_WORKFLOW_GATE.md)を参照。実メーカーの価格やIDは公開GitHub CIやコードへ加えません。
+
 ## Reader専用WIFの固定コミット認証チェック（読み取り専用・未接続）
 
 `pinned_wif_audit.py` に、**GitHubの数値リポジトリID・owner IDとPrivate Repo状態、Google側OIDC issuerと属性マッピング、Reader専用SAのWorkload Identity User IAM policy**を、別途取得した実設定と照合する部品を追加しました。**`workflow_sha`と実行元ソースの`sha`を両方固定**して、未レビューのWorkflow／解析コードからGoogle Reader権限を使えないようにする案です。GitHub Freeの非公開ブランチ保護制約への対策候補ですが、第三者Actions・Python依存コードの安全性や管理者権限は別審査が必要です。
