@@ -8,6 +8,12 @@ Google Driveのメーカー／卸問屋別フォルダにある見積書・商�
 
 `quote_jan_audit.summarize_jan_header_structure(header_row)` により、**商品セルを読まずに**「JAN列が見つからない／1列／複数列」を見分ける。1列の通常見積と、イトウのように依頼時・回答時のJAN欄が2つある資料を混同しない。これはオフラインの読取専用関数で、Driveの全社巡回や自動発注・自動価格判断には接続していない。
 
+## 追加：Excelも同じ共通解析に渡す（ローカル・オフライン試験版）
+
+[`local_excel_bridge.py`](local_excel_bridge.py)を追加。**.xlsx/.xlsm の許可済みファイル1～5タブ**を、ローカルのプライベートなフォルダから**各A1:O40のみ**読み、既存の[`multi_source_readonly.py`](multi_source_readonly.py)へ渡す。SheetsとExcelに異なるJAN/商品名/単価判定ルールを持たせず、共通解析を再利用する。元ファイル/フォルダを変更せず、数式やマクロを実行しない。**架空の4種類のExcelによる14件のテストを追加**。[使い方・制限](MULTI_SUPPLIER_READONLY.md)。
+
+実Driveからは4卸問屋のExcel（.xlsxと.xlsm）の保管形態・対象シート等を確認したが、**Pythonの新ローカルブリッジに実商品の詳細行を投入する処理はまだ実施していない**。ユーザーが指定しない全ファイルを自動取得する処理でもない。原価やJANをGitHubへ転記しない。
+
 ## 追加：実4社の限定横断検索と未解析タブの扱い
 
 2026-11-08、**4社のGoogle Sheets実原本A1:O40についてChatGPTの接続を使った限定JAN/ASIN比較**を行い、対象行合計89・数値型JAN60・ASIN形式の行44を集計。限定範囲内の異なる卸問屋間で共通JAN/ASIN候補は0件だったが、**別タブ・未検索範囲を含めて不存在とは断定しない**。[匿名検証記録](https://github.com/gyallen0130/amazon-business-knowledge/blob/main/suppliers/pilots/four-supplier-live-cross-lookup-2026-11-08.md)を参照。**新Python接続部の実Google認証実行とは別**の実原本の一時検査。
