@@ -68,6 +68,10 @@ def _normal(row):
         'pack': _text(row.get('pack_quantity')),  # NOT order_multiple (purchase lot).
         'size': _text(row.get('capacity') or row.get('size')),
         'ambiguous_asin': len(_asins(row)) > 1,
+        # An upstream reader may find duplicated JAN headers or alternative
+        # barcode cells with unclear semantics. Never approve a strong match
+        # based only on the first JAN column in that situation.
+        'jan_source_ambiguous': row.get('jan_source_ambiguous') is True,
     }
 
 
@@ -104,7 +108,9 @@ def _classify(a, b):
     if conflict:
         status = 'conflict'
     elif (same_jan and shared_asin and same_name and
-          not a['ambiguous_asin'] and not b['ambiguous_asin']):
+          not a['ambiguous_asin'] and not b['ambiguous_asin']
+          and not a['jan_source_ambiguous']
+          and not b['jan_source_ambiguous']):
         status = 'strong_candidate'
     elif same_jan or shared_asin:
         status = 'id_candidate'
@@ -113,6 +119,8 @@ def _classify(a, b):
 
     if a['ambiguous_asin'] or b['ambiguous_asin']:
         evidence.append('ambiguous_asin')
+    if a['jan_source_ambiguous'] or b['jan_source_ambiguous']:
+        evidence.append('jan_columns_require_review')
     return {'status': status, 'evidence_codes': sorted(evidence)}
 
 
