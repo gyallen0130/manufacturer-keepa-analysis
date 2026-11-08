@@ -232,5 +232,47 @@ class CrossSupplierReadOnlyTests(unittest.TestCase):
 
 
 
+    def test_empty_selected_tab_does_not_block_other_suppliers(self):
+        examples = sources()
+        examples[1]['rows'] = []
+        result = normalize_selected_sources(examples)
+        self.assertEqual(result['public_summary']['source_status_counts'],
+                         {'parsed': 3, 'empty': 1, 'needs_review': 0})
+        self.assertFalse(result['public_summary']['all_selected_windows_parsed'])
+        self.assertEqual(result['private_normalized_docs'][1]['records'], [])
+        hit = search_selected_sources(result, field='model', query='TEST-M001')
+        self.assertEqual(hit['public_summary']['hits_returned'], 1)
+        self.assertEqual(hit['public_summary']['sources_not_searchable'], 1)
+        self.assertEqual(hit['public_summary']['sources_with_parsed_headers'], 3)
+
+    def test_unknown_header_requires_review_without_guessing_product(self):
+        examples = sources()
+        examples[1]['rows'] = [['日付', '概要'], ['2026', '商品らしき何か']]
+        result = normalize_selected_sources(examples)
+        self.assertEqual(result['public_summary']['source_status_counts']
+                         ['needs_review'], 1)
+        self.assertEqual(result['private_normalized_docs'][1]['source_status'],
+                         'needs_review')
+        self.assertEqual(result['private_normalized_docs'][1]['records'], [])
+        self.assertFalse(result['public_summary']['purchase_allowed'])
+
+    def test_all_selected_empty_tabs_report_no_results_but_incomplete_coverage(self):
+        example = sources()[0]
+        example['rows'] = [[]]
+        result = normalize_selected_sources([example])
+        self.assertEqual(result['public_summary']['record_count'], 0)
+        self.assertEqual(result['public_summary']['source_status_counts']['empty'], 1)
+        search = search_selected_sources(result, field='model', query='TEST-M001')
+        self.assertEqual(search['public_summary']['hits_returned'], 0)
+        self.assertEqual(search['public_summary']['sources_not_searchable'], 1)
+        self.assertFalse(search['public_summary']['all_supplier_folders_searched'])
+
+    def test_unexpected_parser_errors_are_not_silently_ignored(self):
+        examples = sources()
+        examples[1]['header_row'] = 99
+        with self.assertRaises(ValueError):
+            normalize_selected_sources(examples)
+
+
 if __name__ == '__main__':
     unittest.main()
