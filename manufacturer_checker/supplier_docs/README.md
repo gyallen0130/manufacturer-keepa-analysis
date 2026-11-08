@@ -58,6 +58,22 @@ document-type は manufacturer_list / quote_request / quote_response / catalog /
 
 **実運用前の追加条件**：現時点の専用サービスアカウントには *Google Sheets 2ファイルへのViewer共有* しかありません。Driveフォルダの巡回には所有者の明示的な許可が必要で、Drive APIの有効化、鍵なしの **Drive metadata readonly** スコープ（`https://www.googleapis.com/auth/drive.metadata.readonly`）と、**許可した対象フォルダの閲覧権限**を別途準備する必要があります。既存の `spreadsheets.readonly` だけではDriveのフォルダ一覧取得はできません。フォルダ全体を安易に共有せず、承認済みの対象範囲を明文化してから実装します。
 
+## 差分スナップショットの暗号化保存と解析候補キュー（開発用）
+
+`supplier_docs.snapshot_store` に、Drive一覧の**ファイルID・更新版番号をローカル暗号化して保存**する試験用モジュールを追加しました。用途はLinux/POSIX環境に限定しています。原本のコピーや仕入原価そのものは保存対象に含みません。
+
+- `write_encrypted_inventory(path, key=..., snapshots=..., expected_revision=...)`: 呼び出し元が明示的に承認した一覧だけをFernetで暗号化し、所有者だけがアクセスできる0700ディレクトリに0600ファイルとして原子的に保存。新規保存は上書き禁止、更新には直前に取得した暗号文リビジョンが必要です。
+- `read_encrypted_inventory(path, key=...)`: 暗号文の改ざん・復号失敗・危険な権限を拒否して、前回の一覧と照合用リビジョンを復元します。
+- `review_queue(previous, current)`: 新規・更新ファイルだけを私的な確認キューへ振り分けます。Google Sheetsは閲覧専用解析の候補、Excel・CSV等のファイルは未実装の取得処理を要求する**手動確認候補**にします。ファイルID・フォルダIDはキュー内の機密情報であり、公開するのは集計欄のみです。
+- `finalize_inventory(previous, current, completed_locations=..., reviewed_unavailable=...)`: 初回は `approve_initial_baseline=True` の明示的許可が必要です。2回目以降は**更新対象の全件処理と閲覧不可ファイルの確認が揃わない限り、基準点の更新を拒否**します。失敗時に古いスナップショットを保持して再試行できる設計です。
+
+**運用上の重要事項**
+
+- 暗号鍵は、別のアクセス管理されたSecret Managerなどで保持し、GitHubのコード・ノートブック・ログ・スナップショットと同じ保存場所には置かないでください。**鍵の発行・保管先・定期実行環境は未設定**であり、現時点では自動保存は稼働していません。
+- 上記の関数は対象ファイルの自動ダウンロード・解析実行・仕入れ判断・発注を行いません。キューを実際のSheets API解析に接続する際は、対象ファイルとシートの許可リスト、文書種別、処理成功の記録を別途確認します。
+- スナップショットには機密のファイルIDが含まれます。暗号文であっても、既定でGitHub・共有Drive・公開CIログへのアップロードは禁止します。
+- 現状の保存APIは**単一の書込プロセスを想定**しており、複数プロセスの同時実行ロック・クラウド永続化・障害復旧は未実装です。これらが整うまでは本番の定期実行に使用しません。
+
 ## 安全なAPI接続の試運転
 
 上の鍵なし代理認証手順に従い、まず1シートの40行以内だけを `--summary-only` で試験してください。サービスアカウントはViewer権限のみ、トークンは15分の `spreadsheets.readonly` スコープです。
