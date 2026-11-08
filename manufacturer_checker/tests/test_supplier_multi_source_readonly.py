@@ -48,7 +48,7 @@ def sources():
             'document_type': 'quote_response',
             'rows': [
                 ['', '商品名', '', '商品名（Amazon）', 'ASIN',
-                 'JAN', '', '発注単位', '卸値（税込）'],
+                 'JAN', '卸値', '発注単位', '卸値（税込）'],
                 ['', '架空ゼラチンA', '', '架空ゼラチンA',
                  ASIN_X, JAN_X, '', '6袋', 650],
             ],
@@ -159,9 +159,15 @@ class CrossSupplierReadOnlyTests(unittest.TestCase):
         first = result['private_normalized_docs'][0]['records'][0]
         second = result['private_normalized_docs'][1]['records'][0]
         self.assertEqual(first['cost_tax_mode'], 'excluded')
-        self.assertEqual(second['cost_tax_mode'], 'included')
+        # Wako has two different headings that both map to cost_amount.
+        # No price can safely be selected from the ambiguous source.
+        self.assertEqual(second['cost_tax_mode'], 'unknown')
         self.assertTrue(first['cost_present'])
-        self.assertTrue(second['cost_present'])
+        self.assertFalse(second['cost_present'])
+        self.assertIn('cost_amount',
+                      result['public_summary']['ambiguous_field_source_counts'])
+        self.assertEqual(result['public_summary']
+                         ['ambiguous_field_source_counts']['cost_amount'], 1)
 
     def test_real_values_absent_from_public_output(self):
         result = normalize_selected_sources(self.specs)
@@ -212,6 +218,18 @@ class CrossSupplierReadOnlyTests(unittest.TestCase):
                 self.assertEqual(row['decision'], 'needs_confirmation')
         self.assertEqual(r['public_summary']['confirmed_product_matches'], 0)
         self.assertFalse(r['public_summary']['purchase_allowed'])
+
+    def test_two_cost_columns_produce_source_review_not_price(self):
+        result = normalize_selected_sources(self.specs)
+        wako = result['private_normalized_docs'][1]
+        self.assertNotIn('cost_amount', wako['mapped_columns'])
+        self.assertTrue(any(
+            'AMBIGUOUS_COLUMNS' in warning['codes'] and
+            'cost_amount' in warning.get('fields', [])
+            for warning in wako['warnings']))
+        self.assertEqual(result['public_summary']
+                         ['ambiguous_field_source_counts'], {'cost_amount': 1})
+
 
 
 if __name__ == '__main__':
