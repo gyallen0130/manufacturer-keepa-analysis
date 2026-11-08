@@ -8,6 +8,12 @@ Google Driveのメーカー／卸問屋別フォルダにある見積書・商�
 
 `quote_jan_audit.summarize_jan_header_structure(header_row)` により、**商品セルを読まずに**「JAN列が見つからない／1列／複数列」を見分ける。1列の通常見積と、イトウのように依頼時・回答時のJAN欄が2つある資料を混同しない。これはオフラインの読取専用関数で、Driveの全社巡回や自動発注・自動価格判断には接続していない。
 
+## 追加：事前選択したGoogle Sheetsを4社共通の解析器へ接続（開発用）
+
+[`sheets_multi_bridge.py`](sheets_multi_bridge.py)を追加。1～5の許可済みタブを列挙して**メタデータで存在/可視性を先に確認**し、A1:O40のみ`FORMULA`形式で読取、既存[`multi_source_readonly.py`](multi_source_readonly.py)に渡して正規化・限定横断検索する。検索条件を読取前にチェックし、単価列が複数ある場合は共通解析結果の`ambiguous_field_source_counts`に件数だけを残し、単価の自動採用をしない。
+
+Google Sheetsの実原本4件をChatGPTの接続から限定確認し、**実JAN・価格を保存せず**、見出し構造・数値型・数式の存在を調査した。Python接続部自体は[架空のSheets API応答13テスト](../tests/test_supplier_sheets_multi_bridge.py)で検証。**ChatGPTコネクタをPythonに直接接続したのではない**。詳細は[MULTI_SUPPLIER_READONLY.md](MULTI_SUPPLIER_READONLY.md)。Draft PR未マージ、実認証・本番連携なし。
+
 ## 追加：4社の資料を共通形式で正規化・横断検索（オフライン開発MVP）
 
 [`multi_source_readonly.py`](multi_source_readonly.py)は、手動で事前承認されたGoogle Sheets/Excel等の**2次元行配列を最大5資料まで**既存パーサーに渡し、JAN/ASIN/商品名/品番/メーカー名による**限定範囲の横断照会**を行う。メーカー別タブの名前を行のメーカー名と同一視せず、価格列が複数ある資料では単価を推測で採用しない。
