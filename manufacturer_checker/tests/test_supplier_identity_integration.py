@@ -48,5 +48,19 @@ class SupplierIdentityIntegrationTests(unittest.TestCase):
         self.assertEqual(outcome['public_summary']['decision'], 'human_review_required')
 
 
+    def test_parser_rows_with_unresolved_duplicate_jan_provenance_are_downgraded(self):
+        a = parsed()['records']
+        b = parsed()['records']
+        # The reader saw multiple 'JAN' headers and must preserve that fact
+        # in the private record until their business meaning is verified.
+        for record in b:
+            record['jan_source_ambiguous'] = True
+        outcome = compare_supplier_rows(a, b)
+        self.assertEqual(outcome['public_summary']['status_counts']['strong_candidate'], 0)
+        self.assertEqual(outcome['public_summary']['status_counts']['id_candidate'], 1)
+        self.assertIn('jan_columns_require_review',
+                      outcome['private_pairs'][0]['evidence_codes'])
+
+
 if __name__ == '__main__':
     unittest.main()
