@@ -7,7 +7,9 @@ import io
 import unittest
 from unittest.mock import Mock, patch
 
-from supplier_docs.auth import SHEETS_READONLY_SCOPE, build_readonly_sheets_service
+from supplier_docs.auth import (SHEETS_READONLY_SCOPE, DRIVE_METADATA_READONLY_SCOPE,
+                                build_readonly_sheets_service,
+                                build_readonly_drive_metadata_service)
 from supplier_docs.cli import main
 
 
@@ -50,6 +52,41 @@ class SupplierAuthenticationTests(unittest.TestCase):
             source_credentials=source)
         adc.assert_not_called()
         self.assertIs(impersonate.call_args.kwargs['source_credentials'], source)
+
+    def test_invalid_drive_reader_identity_rejected_before_adc(self):
+        for identity in (None, '', 'example@gmail.com', 'unsafe/actor',
+                         'prod@other.example.com'):
+            with self.assertRaises(ValueError):
+                build_readonly_drive_metadata_service(identity)
+
+    @patch('googleapiclient.discovery.build')
+    @patch('google.auth.impersonated_credentials.Credentials')
+    @patch('google.auth.default')
+    def test_drive_client_uses_only_metadata_read_scope(self, adc, impersonate, build):
+        source, delegated, service = object(), object(), object()
+        adc.return_value = (source, 'fake-test-project')
+        impersonate.return_value = delegated
+        build.return_value = service
+        target = 'supplier-docs-reader@fake-project-123.iam.gserviceaccount.com'
+        returned = build_readonly_drive_metadata_service(target)
+        self.assertIs(returned, service)
+        impersonate.assert_called_once_with(
+            source_credentials=source, target_principal=target,
+            target_scopes=[DRIVE_METADATA_READONLY_SCOPE], lifetime=900)
+        build.assert_called_once_with(
+            'drive', 'v3', credentials=delegated, cache_discovery=False)
+        self.assertNotEqual(DRIVE_METADATA_READONLY_SCOPE, SHEETS_READONLY_SCOPE)
+
+    @patch('googleapiclient.discovery.build')
+    @patch('google.auth.impersonated_credentials.Credentials')
+    @patch('google.auth.default')
+    def test_drive_runtime_source_identity_is_injected_not_loaded(self, adc, proxy, build):
+        source = object()
+        build_readonly_drive_metadata_service(
+            'supplier-docs-reader@fake-project-123.iam.gserviceaccount.com',
+            source_credentials=source)
+        adc.assert_not_called()
+        self.assertIs(proxy.call_args.kwargs['source_credentials'], source)
 
     def test_remote_cli_rejects_implicit_adc_or_detailed_output(self):
         base = ['--sheets-id', 'fake-sheet-id', '--sheet-range', "'Example'!A1:B10",
