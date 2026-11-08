@@ -4,6 +4,12 @@ Google Driveのメーカー／卸問屋別フォルダにある見積書・商�
 
 **対象**：.xlsx / .xlsm / .csv / .tsv と、Google Sheets v4の values.get が返す2次元配列。PDF解析、Driveの全フォルダ巡回、定期同期、Keepa照合、利益再計算、発注は未実装です。
 
+## 最新：実Excel POS/ITF関数の直接検証と混在検索の開発
+
+- [実Excelの匿名検証記録](https://github.com/gyallen0130/amazon-business-knowledge/blob/main/suppliers/pilots/row-labeled-pos-itf-real-e2e-and-mixed-search-2026-11-08.md)：リードオフジャパンの実Excel2タブA1:O40をPrivate環境で限定読取し、GitHub現行`row_labeled_candidates.py`とコードポイントハッシュ一致の関数へ直接投入。**POS候補6・ITF候補1、もう1タブは数値型で保留**。Private完全一致検索の動作、JAN・原価の自動採用0、元ExcelのSHA-256不変を確認。
+- [ExcelとGoogle Sheetsの結果を非公開で統合する`mixed_source_readonly.py`](mixed_source_readonly.py)を追加。合計5タブ以内の結果を、元シート・元行の参照を保持して同じ検索空間に渡す。[架空データ11テスト](../tests/test_supplier_mixed_source_readonly.py)で、JANとPOSを区別し、両形式の資料を横断照合する動作を確認。[使い方](MIXED_SOURCE_READONLY.md)。
+- **実Excelの関数試験は完了したが、実Google Sheets認証と実Excelを同一Python環境で検索するE2Eは未完了**。本番の自動同期・価格計算・権限変更・PRマージはしていない。
+
 ## 追加：行内ラベルPOS/ITFをJANと混同せず検索（2026-11-08）
 
 [行内のPOS/ITFコード候補の安全な取扱い](ROW_LABELED_IDENTIFIER_REVIEW.md)と[汎用抽出コード](row_labeled_candidates.py)を追加。多段見出しで項目が複合でも、商品行に独立した`POSコード：`／`ITFコード：`のラベルがあれば、**人が指定した隣接するラベル列／候補列**だけを検証する。`pos_candidate`／`itf_candidate`として行番号つき検索候補にし、JAN・商品名・仕入単価の確定には使わない。数値型や数式の番号は自動採用せず、GS1形式／チェックデジット整合も商品一致の証明とはしない。Sheets／Excelの両ブリッジへ対応、架空データの[14+6件のテスト](../tests/test_supplier_row_labeled_candidates.py)を追加。
