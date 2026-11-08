@@ -74,6 +74,19 @@ document-type は manufacturer_list / quote_request / quote_response / catalog /
 - スナップショットには機密のファイルIDが含まれます。暗号文であっても、既定でGitHub・共有Drive・公開CIログへのアップロードは禁止します。
 - 現状の保存APIは**単一の書込プロセスを想定**しており、複数プロセスの同時実行ロック・クラウド永続化・障害復旧は未実装です。これらが整うまでは本番の定期実行に使用しません。
 
+## 差分からGoogle Sheetsの限定解析へ（開発用・読み取り専用）
+
+`supplier_docs.change_processor.inspect_approved_sheet_changes` を追加しました。前回と今回のDrive差分に基づく候補のうち、**事前承認したGoogle Sheetsファイルとタブだけ**を、既存の `sheets_selected_tabs_summary` へ安全に引き渡します。
+
+- 承認情報はプライベートな辞書 `approved_targets = {(folder_id, sheet_id): {tab_title: document_type}}` で呼び出し元が渡します。実ファイルID・タブ名・仕入価格は公開リポジトリやログへ保存しません。
+- 差分にないファイル、変化していないファイル、Excel等の未対応形式、見知らぬタブ・不正な文書種別は拒否または保留します。
+- API呼び出し前に、対象ファイル数は最大10、各ファイルのタブは最大10、合計読み取り上限は50,000セル、既定の対象は各タブ先頭40行・A:L列までと確認します。制限を超える要求は読み取り前に拒否します。
+- 結果の `summary` は件数と注意コードだけです。ファイルIDを含む `private_inspections` と `pending_locations` は内部確認用の機密情報として扱います。
+- **成功しても `baseline_advanced` は常に `False`** です。解析済みとして自動確定せず、価格・JAN・複数ASIN・規制などを手動または別途検証できる状態で残します。
+- 途中のSheets APIエラーやタブ不一致では処理を失敗させ、部分的な結果を処理完了として扱いません。読み取り対象以外のDrive APIアクセス、スナップショット保存、Keepa分析、発注は実行しません。
+
+この機能は **開発用のPython関数** です。自動実行ジョブには未接続で、Driveフォルダの追加共有や権限拡張もしていません。今回の確認は架空データによるテストのみで、複数ファイルに対する実運用の解析は未確認です。
+
 ## 安全なAPI接続の試運転
 
 上の鍵なし代理認証手順に従い、まず1シートの40行以内だけを `--summary-only` で試験してください。サービスアカウントはViewer権限のみ、トークンは15分の `spreadsheets.readonly` スコープです。
