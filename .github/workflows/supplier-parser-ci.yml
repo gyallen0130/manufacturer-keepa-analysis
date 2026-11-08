@@ -127,4 +127,9 @@ jobs:
         env:
           KEEPA_API_KEY: ""
           DRIVE_PARENT_FOLDER_ID: ""
-        run: python -m unittest discover -s tests -p 'test_supplier_local_backup*.py' -v
+        shell: pwsh
+        run: |
+          python -m unittest discover -s tests -p 'test_supplier_local_backup*.py' -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s tests -p 'test_supplier_owner_key_vault.py' -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
