@@ -158,6 +158,10 @@ JANの重複・価格らしい見出しの複数存在を匿名件数として�
 
 [4社に由来する見出し形式のみを架空行列にしたテスト](../tests/test_supplier_header_layout_guard.py)を追加。ソース内容の実際の全商品行をGitHubへ送っていない。[機密を除いた4社の原本確認記録](https://github.com/gyallen0130/amazon-business-knowledge/blob/main/suppliers/pilots/four-supplier-real-excel-header-geometry-2026-11-08.md)。
 
+### 実Excel上で判定ロジックを限定実行した結果
+
+上記4社の**実Excel4ファイル・7シート**の`A1:O40`に対し、私的な一時実行環境で同じヘッダー判定ロジックを直接適用した結果、**1行ヘッダー5シート／複数行ヘッダー要確認2シート**、**同名JAN見出し重複1シート／複数の価格関連見出し3シート**を検出した。**これはコードの見出し部分の実ファイル試験**であって、`local_excel_bridge.py`と全`parse_rows`を実原本で通した完全E2Eではない。ファイルの生値・原価はログやGitHubへ残していない。
+
 ## CIと実運用の線引き
 
 2026-11-08に調べた4社の**列見出し構造を模した架空の商品データ**を[15件のテスト](../tests/test_supplier_multi_source_readonly.py)で正規化・照会する。実JAN/価格・取引先の個別商品をCIへ渡さない。結果は正規化できる形のソフトウェア上の実証であり、**実際の4社の全商品行をプログラムに投入する一連の実運用試験ではない**。
