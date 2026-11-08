@@ -2,8 +2,9 @@
 
 No scheduled events, PR runs, local implicit-user credentials, Drive
 browsing, files, status uploads or production integrations are allowed.
-The runner logs ONLY anonymized counts; detailed source values remain private
-in Python memory and are discarded when the process exits.
+The runner logs ONLY anonymized counts. Optional detail delivery seals all
+private inspection values to an owner-pinned X25519 public key BEFORE saving
+the encrypted artifact in RUNNER_TEMP. No plaintext artifacts are written.
 
 ENV is NOT an authentication mechanism: a Google-side WIF provider condition
 using immutable repo/owner IDs and exact workflow claims MUST be independently
@@ -59,6 +60,37 @@ def validate_private_manual_runner(environ):
     return manifest
 
 
+
+def validate_encrypted_owner_delivery(environ):
+    """Require complete owner encryption config BEFORE Google API calls.
+
+    The fingerprint is an owner-pinned trust value. Environ alone does not
+    prove key ownership; the owner must validate it independently.
+    """
+    mode = environ.get('SUPPLIER_PRIVATE_RESULT_MODE', 'summary_only')
+    if mode == 'summary_only':
+        return None
+    if mode != 'owner_encrypted_artifact':
+        raise ValueError('unsupported private result handling mode')
+    from .private_result_envelope import HEX_SHA256, _decode
+    import hashlib
+    import hmac
+    key = environ.get('SUPPLIER_RECIPIENT_PUBLIC_KEY_B64')
+    fingerprint = environ.get('SUPPLIER_RECIPIENT_KEY_FINGERPRINT_SHA256')
+    root = environ.get('RUNNER_TEMP')
+    if (not isinstance(fingerprint, str)
+            or not HEX_SHA256.fullmatch(fingerprint)
+            or not isinstance(root, str) or not root):
+        raise ValueError('owner encryption configuration incomplete')
+    public_key = _decode(key, size=32)
+    if not hmac.compare_digest(
+            hashlib.sha256(public_key).hexdigest(), fingerprint):
+        raise ValueError('untrusted owner recipient key')
+    # Avoid touching any files here. Full path review occurs in artifact sink.
+    return {'recipient_public_key_b64': key,
+            'trusted_fingerprint_sha256': fingerprint,
+            'runner_temp': root}
+
 def main(*, environ=None, service_factory=None, stdout=None, stderr=None):
     """Read-only manual probe; never prints secret values or traceback details."""
     output = sys.stdout if stdout is None else stdout
@@ -66,12 +98,17 @@ def main(*, environ=None, service_factory=None, stdout=None, stderr=None):
     try:
         config = os.environ if environ is None else environ
         manifest = validate_private_manual_runner(config)
+        delivery = validate_encrypted_owner_delivery(config)
         if service_factory is None:
             from .auth import build_readonly_sheets_service_from_wif_adc
             service_factory = build_readonly_sheets_service_from_wif_adc
         service = service_factory()
         report = inspect_manual_approved_sheets(
-            service, manifest=manifest, include_sensitive_records=False)
+            service, manifest=manifest,
+            include_sensitive_records=delivery is not None)
+        if delivery is not None:
+            from .private_result_file import stage_owner_report
+            stage_owner_report(report, **delivery)
     except Exception:
         errors.write('Private supplier read refused; review access and source configuration. No details emitted.\n')
         return 1
