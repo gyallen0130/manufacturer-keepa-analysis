@@ -5,6 +5,7 @@ from unittest.mock import Mock
 
 from supplier_docs.drive_delta import (
     SCHEMA_VERSION, scan_approved_folder, plan_changed_files,
+    scan_explicit_folder_set, plan_explicit_folder_set,
 )
 
 ROOT = 'fake_folder_123456'
@@ -153,6 +154,64 @@ class DriveDeltaTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             scan_approved_folder(service, folder_id=ROOT, max_items=0)
         service.files.assert_not_called()
+
+    def test_explicit_folder_set_only_visits_approved_folders(self):
+        other = 'approved_folder_987654'
+        second = {**file_meta(DOC_B, version='3'), 'parents': [other]}
+        service = fake_drive(
+            {'files': [file_meta(DOC_A)]},
+            {'files': [second]},
+        )
+        snapshots = scan_explicit_folder_set(
+            service, folder_ids=[ROOT, other], max_total_items=10)
+        self.assertEqual(set(snapshots), {ROOT, other})
+        self.assertEqual(snapshots[ROOT]['pages_scanned'], 1)
+        calls = service.files.return_value.list.call_args_list
+        self.assertEqual(len(calls), 2)
+        self.assertIn(ROOT, calls[0].kwargs['q'])
+        self.assertIn(other, calls[1].kwargs['q'])
+        self.assertNotIn('name', calls[1].kwargs['fields'])
+        baseline = plan_explicit_folder_set(None, snapshots)
+        self.assertTrue(baseline['is_baseline'])
+        self.assertEqual(baseline['summary']['baseline_count'], 2)
+        self.assertEqual(baseline['candidate_locations'], [])
+        self.assertNotIn(ROOT, json.dumps(baseline['summary']))
+
+    def test_batch_changes_and_missing_folder_require_review(self):
+        other = 'approved_folder_987654'
+        doc = lambda version: {
+            'mime_type': 'application/vnd.google-apps.spreadsheet',
+            'version': version, 'modified_time': ''}
+        before = {ROOT: snapshot({DOC_A: doc('1')}),
+                  other: snapshot({DOC_B: doc('1')}, folder_id=other)}
+        after = {ROOT: snapshot({DOC_A: doc('2'), DOC_C: doc('1')}),
+                 other: snapshot({}, folder_id=other)}
+        plan = plan_explicit_folder_set(before, after)
+        self.assertEqual(plan['summary']['new'], 1)
+        self.assertEqual(plan['summary']['changed'], 1)
+        self.assertEqual(plan['summary']['unavailable_needs_review'], 1)
+        self.assertIn((ROOT, DOC_A), plan['candidate_locations'])
+        self.assertIn((ROOT, DOC_C), plan['candidate_locations'])
+        self.assertIn((other, DOC_B), plan['unavailable_locations'])
+        with self.assertRaises(ValueError):
+            plan_explicit_folder_set(before, {ROOT: after[ROOT]})
+
+    def test_batch_rejects_duplicate_approved_folders_without_network(self):
+        service = Mock()
+        with self.assertRaises(ValueError):
+            scan_explicit_folder_set(service, folder_ids=[ROOT, ROOT])
+        service.files.assert_not_called()
+
+    def test_batch_fails_closed_when_second_folder_cannot_be_fully_scanned(self):
+        other = 'approved_folder_987654'
+        service = fake_drive(
+            {'files': [file_meta(DOC_A)]},
+            {'files': [], 'nextPageToken': 'continued'},
+        )
+        with self.assertRaises(ValueError):
+            scan_explicit_folder_set(
+                service, folder_ids=[ROOT, other], max_total_pages=2)
+        self.assertEqual(service.files.return_value.list.call_count, 2)
 
     def test_snapshot_mismatch_and_corruption_refused(self):
         good = snapshot({DOC_A: {
