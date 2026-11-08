@@ -79,7 +79,7 @@ def evaluate_offer_pack_guard(quote, listing):
     if type(q_verified) is not bool:
         raise ValueError('invalid quote verification flag')
     source = listing.get('source', 'unverified')
-    if source not in _ALLOWED:
+    if not isinstance(source, str) or source not in _ALLOWED:
         raise ValueError('invalid listing evidence level')
 
     expected = q_items * q_boxes if q_items and q_boxes else None
