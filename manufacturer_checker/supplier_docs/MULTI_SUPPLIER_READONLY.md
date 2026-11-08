@@ -1,5 +1,11 @@
 # 卸問屋横断の共通正規化・照会MVP（2026-11-08／開発用）
 
+## 最新：POS/ITFの実Excel検証、Excel/Sheets検索結果のPrivate統合
+
+**実Excel2タブをA1:O40で限定読取し、現行`row_labeled_candidates.py`と一致するPythonソースへ直接入力**。**POS6件・ITF1件**の文字列型候補、もう1タブは数値型で候補0件。元ExcelのSHA-256不変、JANと原価は未確定。[匿名実測](https://github.com/gyallen0130/amazon-business-knowledge/blob/main/suppliers/pilots/row-labeled-pos-itf-real-e2e-and-mixed-search-2026-11-08.md)。
+
+[MIXED_SOURCE_READONLY.md](MIXED_SOURCE_READONLY.md)に、既に承認されたExcel／SheetsのPrivate解析結果を同じPython環境でまとめる設計・手順を記録。JAN/ASIN/POS/ITFの分離、元行・ソース種別保持、計5タブ上限、[架空データ11テスト](../tests/test_supplier_mixed_source_readonly.py)を追加。**実Google認証＋実Excelの同時E2Eは引き続き未実施**。
+
 ## 行内のPOS/ITFラベルをJANとは独立して検索する
 
 [新しい行ラベル確認と使い方](ROW_LABELED_IDENTIFIER_REVIEW.md)：見出しが多段のままでも、商品行に`POSコード`・`ITFコード`という**独立のラベル**と隣接値があれば、明示した列番号から候補値のみ取得。文字列型・GS1チェックデジットを確認し、`pos_candidate`／`itf_candidate`の専用検索（`field='pos'`/`field='itf'`）を行う。**既存のJAN検索に自動混入させない**。`labeled_review`は検索候補だけの状態で、商品名、現行SKU、入数、仕入単価、利益は未確定。Excel/Sheets共通入口で同じ事前検証を使う。
