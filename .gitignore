@@ -9,3 +9,9 @@ local_config.json
 *.xlsx
 *.zip
 .ipynb_checkpoints/
+
+# Google GitHub Actions WIF creates short-lived credentials locally.
+gha-creds-*.json
+# Do not commit private supplier target configuration or credentials.
+supplier-read-manifest.private.json
+supplier-private-keys/
