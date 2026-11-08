@@ -6,8 +6,10 @@
 # Never put the OWNER's X25519 PRIVATE key into any GitHub repo or Secrets.
 # Action SHAs are resolved from GitHub's tagged commits, not automatically
 # trusted. Separately review commits before deploying to a PRIVATE repo.
-# Python packages below are NOT hash-locked: live deployment remains BLOCKED
-# until a hashed dependency lock/wheel supply-chain audit is completed.
+# Linux Python 3.11 PyPI wheels are pinned by hash in the adjacent reviewed
+# approved-requirements-hashed.txt. This verifies bytes, NOT package safety.
+# Deployment is still BLOCKED pending independent source/action audit, actual
+# WIF IAM verification, private repo controls, billing and owner key custody.
 # Do NOT enable until Google-side WIF conditions, IAM, billing, workflow
 # integrity and private secret handling have been independently reviewed.
 name: Supplier manual Sheets read - PRIVATE ONLY
@@ -50,10 +52,11 @@ jobs:
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5 reviewed
         with:
           python-version: '3.11'
-      - name: Install bounded read-only dependencies
+      - name: Install reviewed public wheels by exact version and SHA256 only
         run: |
-          python -m pip install 'google-api-python-client>=2,<3' 'google-auth>=2,<3'
-          python -m pip install 'cryptography>=42,<47'
+          python -m pip install --require-hashes --only-binary=:all: \
+            -r manufacturer_checker/supplier_docs/approved-requirements-hashed.txt
+          python -m pip check
       - name: Authenticate with approved Google-side WIF provider
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3 reviewed
         with:
