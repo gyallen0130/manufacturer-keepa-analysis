@@ -8,6 +8,12 @@ Google Driveのメーカー／卸問屋別フォルダにある見積書・商�
 
 `quote_jan_audit.summarize_jan_header_structure(header_row)` により、**商品セルを読まずに**「JAN列が見つからない／1列／複数列」を見分ける。1列の通常見積と、イトウのように依頼時・回答時のJAN欄が2つある資料を混同しない。これはオフラインの読取専用関数で、Driveの全社巡回や自動発注・自動価格判断には接続していない。
 
+## 追加：Excel／Sheets共通の見出し形状チェック（実ファイルで限定検証）
+
+[`header_layout_guard.py`](header_layout_guard.py)を共通の[`multi_source_readonly.py`](multi_source_readonly.py)に統合し、**先頭40行×15列における1行ヘッダー／複数行ヘッダー／検出不能／空**を分類する。複数行ヘッダーは**価格・JAN・入数を推測で1行にまとめず`needs_review`**とし、他の選択資料の検索は継続する。`header_layout_counts`等の匿名件数を出す。JAN重複・価格関連見出し複数も記録するが、価格正本は決めない。
+
+2026-11-08、**4社の実Excel計7シートの見出し**へ同じ判定ロジックを一時・私的に適用し、`single_row`5件／`multi_row_needs_review`2件、JAN重複1件、価格関連見出し複数3件を確認。**実ファイルの全商品を`local_excel_bridge`へ投入する完全E2Eではない**。[架空データの見出しテスト10件](../tests/test_supplier_header_layout_guard.py)に加え、既存のテストを[GitHub Actions](https://github.com/gyallen0130/manufacturer-keepa-analysis/actions/runs/42462560934)で検証。[実原本の匿名確認](https://github.com/gyallen0130/amazon-business-knowledge/blob/main/suppliers/pilots/four-supplier-real-excel-header-geometry-2026-11-08.md)。
+
 ## 追加：Excelも同じ共通解析に渡す（ローカル・オフライン試験版）
 
 [`local_excel_bridge.py`](local_excel_bridge.py)を追加。**.xlsx/.xlsm の許可済みファイル1～5タブ**を、ローカルのプライベートなフォルダから**各A1:O40のみ**読み、既存の[`multi_source_readonly.py`](multi_source_readonly.py)へ渡す。SheetsとExcelに異なるJAN/商品名/単価判定ルールを持たせず、共通解析を再利用する。元ファイル/フォルダを変更せず、数式やマクロを実行しない。**架空の4種類のExcelによる14件のテストを追加**。[使い方・制限](MULTI_SUPPLIER_READONLY.md)。
