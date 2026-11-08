@@ -8,6 +8,10 @@ Google Driveのメーカー／卸問屋別フォルダにある見積書・商�
 
 `quote_jan_audit.summarize_jan_header_structure(header_row)` により、**商品セルを読まずに**「JAN列が見つからない／1列／複数列」を見分ける。1列の通常見積と、イトウのように依頼時・回答時のJAN欄が2つある資料を混同しない。これはオフラインの読取専用関数で、Driveの全社巡回や自動発注・自動価格判断には接続していない。
 
+## 追加：別日の販促メールで別見積の単価単位を証明しない
+
+`offer_pack_guard.quote_unit_from_document_evidence` は、**原本の対象見積自体に購入単位が明示されているか**と、**同じ商品の別販促メールにケース入数／単価が載っているだけか**を分ける。後者は`related_promotion_cannot_verify_quote_unit`とし、`inner_boxes_per_quoted_unit=None`のまま保留する。卸のケース入数50箱を小売の「見積単価50箱分」や「1箱分」と仮定しない。使用例は[IDENTITY_MATCH_READONLY.md](IDENTITY_MATCH_READONLY.md)。GitHub Actionsの回帰テストは架空データのみ。
+
 ## 追加：Amazon ASINのセット箱数と見積単位の区別（オフライン試験版）
 
 [offer_pack_guard.py](offer_pack_guard.py) でメーカー個装の入数、仕入見積の単価単位、Amazonの1オファーの箱数、卸ケース入数を独立項目として扱う。Amazon本体を直接検証していない転載情報は `secondary_listing` に限定し、仕入単位が不明なら利益計算を保留する。`mark_records_from_pack_guard` で未検証フラグを既存[identity_matcher.py](identity_matcher.py)へ渡し、JAN・ASIN・商品名の一致だけで`strong_candidate`に上げない。詳しい使い方は[IDENTITY_MATCH_READONLY.md](IDENTITY_MATCH_READONLY.md)。**実原本からの自動取得・Amazon/SP-API本番照会・発注/価格改変は未接続**。
