@@ -5,7 +5,7 @@ default projects, bucket discovery, deployment actions or network calls on
 import. Never use on a production SP-API bucket. All actual calls require an
 explicit blob supplied by an authenticated, dedicated supplier-only runtime.
 
-Inventory and review journal are SEPARATE objects and do not form a
+Inventory and review journal belong in SEPARATE buckets and do not form a
 cross-object transaction. Do not enable unattended periodic execution until
 one-writer orchestration, object versioning and recovery are established.
 """
@@ -28,10 +28,12 @@ def _check_blob(blob, purpose):
     if purpose not in OBJECT_NAMES:
         raise ValueError('unsupported private object purpose')
     bucket = getattr(getattr(blob, 'bucket', None), 'name', None)
+    required_prefix = ('supplier-docs-state-' if purpose == 'inventory'
+                       else 'supplier-docs-review-')
     if (not isinstance(bucket, str)
-            or not bucket.startswith('supplier-docs-state-')
+            or not bucket.startswith(required_prefix)
             or getattr(blob, 'name', None) != OBJECT_NAMES[purpose]):
-        raise ValueError('supplier-specific private object required')
+        raise ValueError('purpose-isolated private object required')
 
 
 def _read(blob, *, cipher_key, purpose):
