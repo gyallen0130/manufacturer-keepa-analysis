@@ -17,6 +17,7 @@ def proposed():
         'review_sa': 'supplier-docs-review@' + PROJECT + '.iam.gserviceaccount.com',
         'scheduler_sa': 'supplier-docs-trigger@' + PROJECT + '.iam.gserviceaccount.com',
         'state_bucket': 'supplier-docs-state-test-example',
+        'review_bucket': 'supplier-docs-review-test-example',
         'state_encryption_secret': 'projects/' + PROJECT +
                                    '/secrets/supplier-docs-inventory-key/versions/1',
         'journal_encryption_secret': 'projects/' + PROJECT +
@@ -38,6 +39,7 @@ class SupplierCloudRuntimeTests(unittest.TestCase):
         cfg = proposed()
         result = validate_supplier_cloud_runtime(cfg)
         self.assertEqual(result['separate_identities'], 4)
+        self.assertTrue(result['separate_state_and_review_buckets'])
         self.assertFalse(result['cloud_changes_made'])
         self.assertEqual(result['operation'], 'offline_preflight_only')
         for private_value in cfg.values():
@@ -54,6 +56,15 @@ class SupplierCloudRuntimeTests(unittest.TestCase):
         cfg['job_name'] = 'spapi-supplier-docs-inventory'
         with self.assertRaises(ValueError):
             validate_supplier_cloud_runtime(cfg)
+
+    def test_review_bucket_must_be_distinct_and_purpose_specific(self):
+        for value in ('supplier-docs-state-test-example',
+                      'supplier-docs-state-duplicated',
+                      'amazon-spapi-prod-storage', '', None):
+            cfg = proposed()
+            cfg['review_bucket'] = value
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                validate_supplier_cloud_runtime(cfg)
 
     def test_separate_service_identities_are_required(self):
         for field, replacement in [
