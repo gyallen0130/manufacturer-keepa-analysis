@@ -103,7 +103,10 @@ class LocalExcelBridgeTests(unittest.TestCase):
         docs = outcome['private_normalized_docs']
         self.assertEqual([v['header_row'] for v in docs], [1, 1, 1, 3])
         self.assertEqual(docs[0]['records'][0]['model_number'], 'MODEL-001')
-        self.assertIn('JAN_NUMERIC_CELL', docs[3]['records'][0]['risk_codes'])
+        self.assertIn('JAN_NUMERIC_CELL', [
+            code for warning in docs[3]['warnings']
+            for code in warning['codes']
+        ])
 
     def test_exact_cross_company_jan_lookup_has_original_excel_row(self):
         result = self.inspect(search={'field': 'jan', 'query': JAN_A})
