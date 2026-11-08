@@ -65,7 +65,6 @@ class PrivateActionsBudgetTests(unittest.TestCase):
         self.assertFalse(output['workflow_activated'])
 
     def test_reserve_is_not_consumed_by_estimated_workload(self):
-        output = self.verified(already_used_minutes=1000) if False else None
         output = self.run_guard(
             usage_checked_period='2026-11', account_included_minutes=2000,
             already_used_minutes=1800, owner_verified_remaining=True,
