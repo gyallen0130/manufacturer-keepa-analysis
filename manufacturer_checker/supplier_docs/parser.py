@@ -379,6 +379,7 @@ def parse_rows(rows, *, document_type, source_file_id='', source_url='', source_
             'manufacturer_name_raw': maker,
             'manufacturer_code': _read_column(row, mapping, 'manufacturer_code'),
             'product_name_raw': product,
+            'model_number': _read_column(row, mapping, 'model_number'),
             'jan_string': jan,
             'asin_candidate': asin,
             'asin_candidates': asins,
