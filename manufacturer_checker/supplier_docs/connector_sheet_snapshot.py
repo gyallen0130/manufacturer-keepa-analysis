@@ -67,8 +67,8 @@ def normalize_selected_connector_snapshots(*, manifest, search=None):
         if (not isinstance(file_id, str) or not FILE_ID.fullmatch(file_id)
                 or not isinstance(tab, str) or not _TAB.fullmatch(tab)
                 or not tab.strip()
-                or kind not in DOCUMENT_TYPES
-                or method not in _METHODS
+                or not isinstance(kind, str) or kind not in DOCUMENT_TYPES
+                or not isinstance(method, str) or method not in _METHODS
                 or (header is not None and (type(header) is not int
                                             or not 1 <= header <= 20))
                 or not isinstance(rows, list) or len(rows) > MAX_ROWS
