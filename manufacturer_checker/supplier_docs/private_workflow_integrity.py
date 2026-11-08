@@ -24,7 +24,7 @@ _ACTION_LINE = re.compile(
 _ANY_USES = re.compile(r"^\s*(?:-\s*)?uses:\s*(.+)$", re.MULTILINE)
 
 
-def review_private_workflow_template(text):
+def review_private_workflow_template(text, *, dependency_lock=None):
     """Return anonymized structural gates; fail closed until hash-locked."""
     if not isinstance(text, str) or not 1 <= len(text) <= _MAX_WORKFLOW:
         raise ValueError("bounded private workflow template required")
@@ -64,10 +64,19 @@ def review_private_workflow_template(text):
             "SUPPLIER_PRIVATE_RESULT_MODE: plaintext",
         ))
     )
+    from .private_dependency_lock import inspect_hashed_private_requirements
+    lock_valid = False
+    if dependency_lock is not None:
+        try:
+            inspect_hashed_private_requirements(dependency_lock)
+            lock_valid = True
+        except ValueError:
+            lock_valid = False
     dependencies_locked = (
-        "--require-hashes" in text
+        lock_valid
+        and "python -m pip install --require-hashes --only-binary=:all:" in text
         and "--no-deps" not in text
-        and "approved-requirements-hashed.txt" in text
+        and "-r manufacturer_checker/supplier_docs/approved-requirements-hashed.txt" in text
         and "pip install 'google-api-python-client>=" not in text
         and "pip install 'cryptography>=" not in text
     )
