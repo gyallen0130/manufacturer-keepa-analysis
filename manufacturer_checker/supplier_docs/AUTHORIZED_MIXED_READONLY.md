@@ -46,3 +46,41 @@ print(result['public_search_summary'])
 - **未実施**：`inspect_authorized_mixed_sources`を、権限が実際に設定されたGoogle Reader・許可済み実Excelで直接起動する最終E2E。現在のChatGPT Private実行環境には`GOOGLE_APPLICATION_CREDENTIALS`等の実認証情報が提供されていないため、WIFの認証接続まで完了したとは言わない。Google IAM、WIF、Secrets、SP-APIは今回変更していない。
 - **次の最重要作業**：既存の専用Readerが利用できるPrivate実行環境で、同じマニフェストによる実Google API read-only＋実Excelの限定1回実行を検証し、匿名件数・APIの成功/失敗のみを記録。**追加費用を伴うサービス導入や無断権限変更はしない**。
 
+
+
+## 2026-11-08 追加：実認証前のオフライン安全ゲート
+
+新しい [private_mixed_smoke.py](private_mixed_smoke.py) は、**認証情報を要求しない事前点検**を標準動作にする。GoogleへのAPI呼び出し、資格情報の取得、IAM変更、原本の編集、外部への結果送信は行わない。
+
+所有者が既に認可した非公開フォルダに、以下のファイルを置く（例のフォルダ名も中身もGitHubへ保存しない）。
+
+- `approved_excel.json`：`manual-local-excel-v1` 形式。選択したExcelファイルとタブ名を明示。
+- `approved_sheets.json`：`manual-multi-sheet-v1` 形式。選択したGoogle Spreadsheet IDと可視タブ名を明示。
+- `approved_search.json`：任意。例：`{"field":"jan","query":"<PRIVATE-JAN>"}`。**実値は非公開ファイルにのみ配置**。
+- 参照対象のExcel `.xlsx`／`.xlsm`：上記の相対パスで配置。総タブ数はExcel＋Sheets合計最大5、各`A1:O40`。
+
+初めに**オフラインのみ**で確認する（`manufacturer_checker`を作業ディレクトリとする）。
+
+```sh
+python -m supplier_docs.private_mixed_smoke --private-dir /private/approved-inputs
+```
+
+返値は匿名の`status=offline_preflight_only`、ローカルExcelの候補行数、Googleの未読取タブ数、API呼び出し0、原本更新0。これは**実Google認証・実Sheets取得の成功ではない**。
+
+次の実Sheets読取は、**別途承認済みの専用Reader・権限・WIFを独立に確認したPrivate Python実行環境に限る**。自動CLIからは認証を開始しない。実行担当者は既存の`build_readonly_sheets_service_from_wif_adc`を明示的に選び、非公開スクリプトからのみ呼び出す。
+
+```python
+from supplier_docs.private_mixed_smoke import run_private_mixed_smoke
+from supplier_docs.auth import build_readonly_sheets_service_from_wif_adc
+
+result = run_private_mixed_smoke(
+    private_dir="/private/approved-inputs",
+    execute_readonly=True,
+    service_factory=build_readonly_sheets_service_from_wif_adc,
+)
+print(result["public_summary"])  # 匿名集計のみ
+```
+
+APIクライアントの実行が成功しても`real_google_auth_verified=False`を維持する。**コードが認証主体やIAM条件を証明したと誤認しないため**で、Readerの本人性・最小権限・実行環境は別監査が必要。`public_search_summary`以外の詳細行、元ファイル名、Google ID、原価、検索値、例外文字列をCIやGitHubへ貼り付けない。失敗時にCLIが表示するエラーは一律の匿名メッセージ。
+
+新規[架空データ9件のテスト](../tests/test_supplier_private_mixed_smoke.py)を追加した。**Google APIの実認証E2Eは引き続き未実施**。既存Draft PRを維持し、本番Workflow・IAM・Secrets・課金設定は変更しない。
