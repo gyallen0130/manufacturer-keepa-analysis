@@ -57,6 +57,38 @@ private_hits = hits['private_hits']
 - `mapped_source_counts`は、何社でその列見出しが共通項目に写像されたかの件数。**該当値が完全で正しいという意味ではない**。税区分が不明・価格列が曖昧なら安全側で未確定にする。
 - **画像PDFはまだ処理対象外**。Excelは原本を別途適切に読み取って2次元行配列として渡せるが、このモジュールそのものはExcel/Google SheetsのファイルI/Oをしない。
 
+## Google Sheetsへの読取専用接続を行う新しい境界
+
+2026-11-08、[sheets_multi_bridge.py](sheets_multi_bridge.py)を追加した。利用者／権限のあるPRIVATE実行環境で**すでに認証済みのGoogle Sheets v4読取専用クライアント**を受け取り、明示的に選んだ**1〜5タブ**について、他の情報を自動発見せず**メタデータでタブを検証→A1:O40をFORMULA形式で読取→上記`normalize_selected_sources`へ渡す**。
+
+```python
+from supplier_docs.sheets_multi_bridge import (
+    SCHEMA_VERSION, inspect_selected_google_sheets,
+)
+
+# これは架空のIDと商品を使う構造例です。
+approved_private = {
+    'schema_version': SCHEMA_VERSION,
+    'mode': 'manual_readonly',
+    'targets': [{
+        'spreadsheet_id': 'FAKE_PRIVATE_SHEET_001',
+        'title': 'シート1',
+        'document_type': 'quote_request',
+    }],
+}
+# client は別途ユーザーが読取専用の権限で認証済みのSheets v4。
+# review = inspect_selected_google_sheets(client, manifest=approved_private)
+# print(review['public_summary'])  # 集計件数のみ
+# review['private_normalized_docs'] は機密行を含むので公開しない。
+```
+
+- **外部呼出し前に全選択を検証**：許可されたスキーマ、最大5件、指定タブ名、ドキュメント種別、任意の見出し行、文字長。全タブの可視性をメタデータで確認してから商品行を読む。最大3750セル（5×40×15）。検索条件が無効／短すぎれば**APIに触れず拒否**する。
+- **原本の型を保持**：Google Sheets APIの`valueRenderOption=FORMULA`で、数値型JANと式を文字列の見た目に変換しない。パーサーは数式を評価せず、JANの先頭0の補完もせず、矛盾時は要確認にする。
+- **公開安全な結果**：`public_summary`は資料件数・抽出件数・警告件数・曖昧な共通フィールド（例：2列とも価格候補）・読取API呼出し件数・式セル件数のみ。**生JAN/ASIN/原価/商品名/ファイルIDは返さない**。個別行は`private_normalized_docs`、検索ヒットは`private_hits`に留める。
+- 読取専用とは**認証/接続権限の代替ではない**。このコードがGoogleサービスへログインしたり、自動的にChatGPTコネクタの認証を引き継いだりすることはない。**本番の連携や定期巡回を新たに有効化したものではない**。
+
+2026-11-08、ChatGPTからは**井上・ワコーフーズ・ヨシダ・イトウの実原本A1:O40をFORMULA形式で限定読取**してセルの型・見出し・数式の存在を個別確認。とくにワコーフーズは**G列「卸値」・I列「卸値（税込）」**の両方が価格候補で、共通パーサーが勝手に単価列を決めない必要がある。**この実資料確認はChatGPTコネクタ上の限定検査であり、新しいPython接続関数を実原本のGoogle API資格情報で実行したものではない**。コードの接続部分については[Google Sheets v4模擬サービスのテスト](../tests/test_supplier_sheets_multi_bridge.py)13件を追加した。
+
 ## CIと実運用の線引き
 
 2026-11-08に調べた4社の**列見出し構造を模した架空の商品データ**を[15件のテスト](../tests/test_supplier_multi_source_readonly.py)で正規化・照会する。実JAN/価格・取引先の個別商品をCIへ渡さない。結果は正規化できる形のソフトウェア上の実証であり、**実際の4社の全商品行をプログラムに投入する一連の実運用試験ではない**。
