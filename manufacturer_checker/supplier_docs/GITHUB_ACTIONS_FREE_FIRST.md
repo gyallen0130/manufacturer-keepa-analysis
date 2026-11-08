@@ -4,7 +4,7 @@
 
 ## 採用を検討する理由
 
-Apps Scriptの `drive.metadata.readonly` は実行ユーザーのDriveメタデータへ広く及ぶ可能性があります。一方、専用Readerサービスアカウントに**明示共有した資料だけ**を閲覧させる方式なら、原本へのアクセス範囲をより狭く管理できます。GitHub Actionsの標準runnerは無料枠を利用できる可能性がありますが、**Private Repoの実行時間は他のワークフローの利用分を含めて計上**されるため、実際に無料かは未確定です。
+Apps Scriptの `drive.metadata.readonly` は実行ユーザーのDriveメタデータへ広く及ぶ可能性があります。一方、専用Readerサービスアカウントに**明示共有した資料だけ**を閲覧させる方式なら、原本へのアクセス範囲をより狭く管理できます。GitHub Actionsの標準runnerは含有クレジットを使える可能性がありますが、**GitHub Freeの月12 USD共有コンピュートクレジット**に、Private Repoなどの対象利用の計算額が加算されます。固定の月2,000分を残量として扱わないでください。実際に追加費用がないかは未確定です。
 
 ## 最低限の構成
 
@@ -14,7 +14,7 @@ Apps Scriptの `drive.metadata.readonly` は実行ユーザーのDriveメタデ�
 4. 対象Google APIに必要なアクセスは**Reader SAだけ**へ。WIFの `roles/iam.workloadIdentityUser` が必要な場合、対象Reader SA**単体**に付与し、プロジェクト全体や旧SP-API用SAに付与しない。**Google側IAM設定はまだ未実施**。
 5. 同一Google Sheetsでも読むシートと範囲は明示設定。既存の `spreadsheets.readonly` を使用し、価格などの原文をGitHubログに出さない。Driveフォルダ巡回権限やファイル共有を勝手に増やさない。
 6. GitHub Runnerは実行ごとに一時的な環境になるため、**差分の前回スナップショットを永続化する非公開の保存先**が別途必要。専用Readerの閲覧権限と保存用の書込権限は分ける。保存先の安全性・所有者アクセス・費用が未解決なら**初回の実行を有効にしない**。
-7. 無料枠に収まるかGitHub Billingの既存Actions分数とGoogle Sheets/Drive APIの現在のクォータを確認。Google Sheets APIは標準使用が無料と案内されているものの、**2026年後半にクォータ超過への課金が予定されている**ため、API呼び出し上限を明示し、超過時に再試行連打をしない。既存Keepaの追加APIコール費用も増やさない。
+7. 無料枠に収まるかGitHub Billingの当月共有コンピュートクレジット使用額とGoogle Sheets/Drive APIの現在のクォータを確認。Google Sheets APIは標準使用が無料と案内されているものの、**2026年後半にクォータ超過への課金が予定されている**ため、API呼び出し上限を明示し、超過時に再試行連打をしない。既存Keepaの追加APIコール費用も増やさない。
 
 ## 開発用事前検査
 
@@ -40,7 +40,7 @@ Apps Scriptの `drive.metadata.readonly` は実行ユーザーのDriveメタデ�
 
 ## 公式資料（2026-11-08に再確認）
 
-- [GitHub Actionsの料金とPrivate Repoの利用枠](https://docs.github.com/en/actions/concepts/billing-and-usage)
+- [GitHub Actionsのドル建て共有コンピュート料金](https://docs.github.com/en/billing/concepts/product-billing/github-actions)
 - [GitHub OIDCの権限](https://docs.github.com/en/actions/reference/security/oidc)
 - [Google CloudのWIF／GitHubの条件](https://docs.cloud.google.com/iam/docs/workload-identity-federation-with-deployment-pipelines)
 - [Google Cloud WIF](https://docs.cloud.google.com/iam/docs/workload-identity-federation)
