@@ -14,6 +14,7 @@ from .multi_source_readonly import (
 SUPPORTED = {
     ('manual-local-excel-v1', 'manual_local_excel_readonly'): 'excel',
     ('manual-multi-sheet-v1', 'manual_readonly'): 'sheets',
+    ('manual-connector-sheet-snapshot-v1', 'manual_snapshot_readonly'): 'sheets',
 }
 MAX_RECORDS_PER_DOC = 40
 SOURCE_STATUSES = frozenset({
