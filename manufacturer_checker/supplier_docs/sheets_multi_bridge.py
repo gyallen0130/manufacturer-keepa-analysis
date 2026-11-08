@@ -16,6 +16,7 @@ from .multi_source_readonly import (
     validate_source_lookup,
 )
 from .parser import DOCUMENT_TYPES
+from .tiered_header_mapping import validate_tiered_mapping_schema
 from .readers import sheets_values, sheets_visible_tabs
 
 SCHEMA_VERSION = 'manual-multi-sheet-v1'
@@ -26,6 +27,7 @@ MAX_READ_CELLS = MAX_SOURCES * ROWS_PER_TAB * 15
 _TAB = re.compile(r"^[^!\r\n\x00-\x1f]{1,100}$")
 _ALLOWED_TARGET_KEYS = frozenset({
     'spreadsheet_id', 'title', 'document_type', 'header_row',
+    'tiered_mapping',
 })
 
 
@@ -63,8 +65,13 @@ def validate_multi_sheet_manifest(manifest):
                     (type(hrow) is not int or not 1 <= hrow <= 20))
                 or (file_id, title) in seen):
             raise ValueError('invalid, hidden or duplicate sheet selection')
+        tiered_mapping = target.get('tiered_mapping')
+        if tiered_mapping is not None:
+            validate_tiered_mapping_schema(tiered_mapping)
+            if hrow is not None:
+                raise ValueError('cannot mix single header with tiered mapping')
         seen.add((file_id, title))
-        result.append((file_id, title, doc_type, hrow))
+        result.append((file_id, title, doc_type, hrow, tiered_mapping))
     if len(result) * ROWS_PER_TAB * 15 > MAX_READ_CELLS:
         raise ValueError('aggregate cell read budget exceeded')
     return result
@@ -86,7 +93,7 @@ def inspect_selected_google_sheets(sheets_service, *, manifest, search=None):
     # Preflight ALL tab visibility before reading any cells.
     # Reuse metadata for the same spreadsheet so queries remain bounded.
     visible_by_file = {}
-    for file_id, title, _, _ in planned:
+    for file_id, title, _, _, _ in planned:
         if file_id not in visible_by_file:
             visible_by_file[file_id] = sheets_visible_tabs(
                 sheets_service, spreadsheet_id=file_id, max_tabs=100)
@@ -95,7 +102,7 @@ def inspect_selected_google_sheets(sheets_service, *, manifest, search=None):
 
     specs = []
     formulas = 0
-    for file_id, title, doc_type, header_row in planned:
+    for file_id, title, doc_type, header_row, tiered_mapping in planned:
         escaped = title.replace("'", "''")
         rows = sheets_values(
             sheets_service, spreadsheet_id=file_id,
@@ -109,6 +116,7 @@ def inspect_selected_google_sheets(sheets_service, *, manifest, search=None):
             'source_sheet': title,
             'document_type': doc_type,
             'header_row': header_row,
+            'tiered_mapping': tiered_mapping,
             'rows': rows,
         })
 
