@@ -4,6 +4,14 @@ Google Driveのメーカー／卸問屋別フォルダにある見積書・商�
 
 **対象**：.xlsx / .xlsm / .csv / .tsv と、Google Sheets v4の values.get が返す2次元配列。PDF解析、Driveの全フォルダ巡回、定期同期、Keepa照合、利益再計算、発注は未実装です。
 
+## 最新：4社の実Excelで共通解析・JAN/ASIN検索の限定E2Eを確認（2026-11-08）
+
+- **実原本4卸問屋・5シートの先頭A1:O40を、開発用`local_excel_bridge.py`本体に直接通した**。GitHub Actionsから取り出した公開Pythonコードだけを非公開実行環境へ配置し、実仕入先Excelはそこだけで読み取った。**3シート解析可能・2シートは複数行ヘッダーで要確認**。実商品からJANとASINを1件ずつ選ぶ限定完全一致検索も動作し、どちらも1件のヒットを取得。**商品の同一性・異なる卸問屋間の重複を証明していない**。
+- **ブラックスの`.xlsx`を使った場合52候補レコード／`.xlsm`へ入れ替えた場合60候補レコード**。この2つは比較試験で、**合計112件の別商品ではない**。各プロファイル4社5シート、リードオフジャパンの2段階の見出し資料は安全に`needs_review`。
+- **原本ハッシュは前後で一致**。JAN・ASIN・原価等の実データをGitHub・CIへ送っていない。私的ローカル実行であり、Drive全件同期や無人取得ではない。[確認記録（Private共通知識）](https://github.com/gyallen0130/amazon-business-knowledge/blob/main/suppliers/pilots/four-supplier-real-excel-e2e-2026-11-08.md)。
+- **同じ手動検証を再利用するCLI**として[`local_excel_probe.py`](local_excel_probe.py)を追加。`--root`と`--manifest`に**ローカルの承認済み入力**を渡し、`public_summary`のみ表示。検索も非公開JSONの`--search-manifest`で渡して番号を標準出力に出さない。[合成データによるCLI6件のテスト](../tests/test_supplier_local_excel_probe.py)を追加。[CIの3ジョブ成功](https://github.com/gyallen0130/manufacturer-keepa-analysis/actions/runs/42464070971)。
+- ソースだけの一時アーティファクト取得用CIステップは**E2E後に削除済み**（保持は1日設定）。**次は多段見出しを根拠付き・明示マッピングで扱う汎用方法**と、Sheetsの実認証Python接続を進める。
+
 ## 追加：JAN列の見出し形状による安全な分岐
 
 `quote_jan_audit.summarize_jan_header_structure(header_row)` により、**商品セルを読まずに**「JAN列が見つからない／1列／複数列」を見分ける。1列の通常見積と、イトウのように依頼時・回答時のJAN欄が2つある資料を混同しない。これはオフラインの読取専用関数で、Driveの全社巡回や自動発注・自動価格判断には接続していない。
