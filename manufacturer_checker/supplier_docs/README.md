@@ -8,6 +8,10 @@ Google Driveのメーカー／卸問屋別フォルダにある見積書・商�
 
 `quote_jan_audit.summarize_jan_header_structure(header_row)` により、**商品セルを読まずに**「JAN列が見つからない／1列／複数列」を見分ける。1列の通常見積と、イトウのように依頼時・回答時のJAN欄が2つある資料を混同しない。これはオフラインの読取専用関数で、Driveの全社巡回や自動発注・自動価格判断には接続していない。
 
+## 追加：Amazon ASINのセット箱数と見積単位の区別（オフライン試験版）
+
+[offer_pack_guard.py](offer_pack_guard.py) でメーカー個装の入数、仕入見積の単価単位、Amazonの1オファーの箱数、卸ケース入数を独立項目として扱う。Amazon本体を直接検証していない転載情報は `secondary_listing` に限定し、仕入単位が不明なら利益計算を保留する。`mark_records_from_pack_guard` で未検証フラグを既存[identity_matcher.py](identity_matcher.py)へ渡し、JAN・ASIN・商品名の一致だけで`strong_candidate`に上げない。詳しい使い方は[IDENTITY_MATCH_READONLY.md](IDENTITY_MATCH_READONLY.md)。**実原本からの自動取得・Amazon/SP-API本番照会・発注/価格改変は未接続**。
+
 ## 追加：同名のJAN列を持つ見積資料の監査（オフライン試験版）
 
 [quote_jan_audit.py](quote_jan_audit.py) は、原本に2つの「JAN」見出しがある場合に、**明示的に指定した列位置**で表示上の一致／相違／過去の「廃番」等の注意記載／未読を区別する。どちらが現在の商品JANかを推測で決めず、数値型セルを確定JANに変換しない。結果は匿名件数と、非公開で照合する原本の行番号・理由コードに分離する。詳細は[IDENTITY_MATCH_READONLY.md](IDENTITY_MATCH_READONLY.md)。
