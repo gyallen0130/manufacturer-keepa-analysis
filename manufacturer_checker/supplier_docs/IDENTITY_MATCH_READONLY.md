@@ -78,6 +78,16 @@ python -m unittest -v tests.test_supplier_identity_matcher tests.test_supplier_i
 
 この検証の根拠は[イトウの実原本比較（Private知識リポジトリ）](https://github.com/gyallen0130/amazon-business-knowledge/blob/main/suppliers/pilots/itou-jan-column-roles-2026-11-08.md)。**実原本で観察した構造をもとに設計し、プログラムの回帰テストは架空データのみで行った**。この新モジュールを実取引先のファイルへ本番自動適用したという意味ではない。GitHubのDraft PRのまま。
 
+## JAN列の見出し事前判定（複数取引先の誤検出を防止）
+
+2026-11-08に、**井上・ワコーフーズの実Google Sheets見積タブの限定範囲ではJAN見出しがそれぞれ1列**であることを確認。対照的にイトウの見積返信Excelでは2列だった。
+
+`quote_jan_audit.summarize_jan_header_structure(header_row)` は**見出しだけ**を受け取り、`single`／`duplicate_needs_review`／`missing` のいずれかと件数だけを返す。値・価格・原本JANを公開ログに出さず、`single` なら**2列照合はそもそも実施しない**。`duplicate_needs_review` でも原本の依頼／回答メールを確認してから2列を明示的に指定し、推測で正本を決めない。`missing` の資料を「JANなし商品」とも断定しない。
+
+- 依頼JANと返信JANが異なる2商品について、2026-11-08に**メーカー公式ページの該当製品に返信側コードが掲載されている**ことを外部照合した。ただし依頼時のコードとのメーカー公式な新旧対応は未確認で、**strong_candidateへの格上げはしない**。
+- 公開メーカー資料の検証概要は[共通知識側の匿名記録](https://github.com/gyallen0130/amazon-business-knowledge/blob/main/suppliers/pilots/itou-official-jan-crosscheck-2026-11-08.md)。JAN／ASIN／個別見積金額は本リポジトリには保存しない。
+- 新関数のテストは架空の見出しだけで実行する。Google Drive原本に対してこのPython関数を実際に一括起動するものではない。
+
 ## 未実装・未確認
 
 - この関数は、既存 `on_demand_reader.inspect_manual_approved_sheets(...)` の戻り値に含まれる **`private_inspections[i]['tabs'][j]['records']`** を、許可済みの非公開処理から明示的に選んで呼べる。ただし自動選択・常時監視・商品同一性の最終確定は行わない。
