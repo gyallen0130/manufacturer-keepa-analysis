@@ -99,6 +99,7 @@ def scan_approved_folder(service, *, folder_id, max_pages=10,
                 'folder_id': folder_id,
                 'files': entries,
                 'total_items': total,
+                'pages_scanned': page_index + 1,
                 'unsupported_items': ignored,
                 'unscanned_subfolders': subfolders,
             }
@@ -166,4 +167,75 @@ def plan_changed_files(previous, current):
             'unsupported_items': current.get('unsupported_items', 0),
             'unscanned_subfolders': current.get('unscanned_subfolders', 0),
         },
+    }
+
+
+def scan_explicit_folder_set(service, *, folder_ids, max_folders=160,
+                             max_total_pages=240, max_total_items=10000):
+    """Scan ONLY explicitly supplied folders, never recurse or search My Drive.
+
+    Intended for a private per-supplier allowlist after separate consent and
+    permissions. One inaccessible/over-limit folder aborts the *entire* scan;
+    a partial snapshot must never overwrite a complete baseline.
+    """
+    if (not isinstance(folder_ids, (list, tuple))
+            or not folder_ids or len(folder_ids) > max_folders
+            or any(not _valid_id(folder_id) for folder_id in folder_ids)
+            or len(set(folder_ids)) != len(folder_ids)):
+        raise ValueError('invalid or duplicate approved folder list')
+    if (type(max_folders) is not int or not 1 <= max_folders <= 200
+            or type(max_total_pages) is not int or not 1 <= max_total_pages <= 1000
+            or type(max_total_items) is not int or not 1 <= max_total_items <= 50000):
+        raise ValueError('invalid batch scan bounds')
+
+    snapshots = {}
+    pages = 0
+    total = 0
+    file_ids = set()
+    for folder_id in folder_ids:
+        if pages == max_total_pages or total == max_total_items:
+            raise ValueError('approved folder set limit exceeded')
+        snapshot = scan_approved_folder(
+            service, folder_id=folder_id,
+            max_pages=min(10, max_total_pages - pages),
+            max_items=min(500, max_total_items - total),
+        )
+        pages += snapshot['pages_scanned']
+        total += snapshot['total_items']
+        if file_ids.intersection(snapshot['files']):
+            raise ValueError('duplicate document in approved folder set')
+        file_ids.update(snapshot['files'])
+        snapshots[folder_id] = snapshot
+    return snapshots
+
+
+def plan_explicit_folder_set(previous, current):
+    """Aggregate *inert* per-folder delta plans with no private IDs in summary."""
+    if not isinstance(current, dict) or not current:
+        raise ValueError('invalid current folder set')
+    if previous is not None and (
+            not isinstance(previous, dict) or set(previous) != set(current)):
+        raise ValueError('approved folder set changed; manual rebaseline required')
+
+    summary = {
+        'baseline_count': 0, 'new': 0, 'changed': 0, 'unchanged': 0,
+        'unavailable_needs_review': 0, 'unsupported_items': 0,
+        'unscanned_subfolders': 0,
+    }
+    pending = []
+    unavailable = []
+    for folder_id, snapshot in current.items():
+        if not _valid_id(folder_id) or snapshot.get('folder_id') != folder_id:
+            raise ValueError('invalid inventory folder set')
+        before = previous[folder_id] if previous is not None else None
+        one = plan_changed_files(before, snapshot)
+        for key in summary:
+            summary[key] += one['summary'][key]
+        pending.extend((folder_id, fid) for fid in one['candidate_file_ids'])
+        unavailable.extend((folder_id, fid) for fid in one['unavailable_file_ids'])
+    return {
+        'is_baseline': previous is None,
+        'candidate_locations': pending,
+        'unavailable_locations': unavailable,
+        'summary': summary,
     }
