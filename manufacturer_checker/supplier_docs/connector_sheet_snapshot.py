@@ -105,7 +105,31 @@ def normalize_selected_connector_snapshots(*, manifest, search=None):
         })
 
     parsed = normalize_selected_sources(selected)
+    suppressed = 0
+    # Exported XLSX may lose live Sheets formula/value-render semantics.
+    # Preserve source column evidence, but suppress ANY quote/cost/lot
+    # inference from native export rows. Product identities remain candidates.
+    for doc, original in zip(parsed['private_normalized_docs'],
+                             manifest['sources']):
+        if original['snapshot_method'] != 'native_export_xlsx':
+            continue
+        doc['native_export_terms_require_review'] = True
+        for record in doc['records']:
+            suppressed += int(bool(record.get('cost_present')))
+            record['cost_present'] = False
+            record['cost_tax_mode'] = 'unknown'
+            record['order_multiple'] = ''
+            record['trade_terms_present'] = False
+            record['source_profit_status'] = 'unclassified'
+            record['decision'] = 'needs_confirmation'
     summary = dict(parsed['public_summary'])
+    summary['records_with_cost_field'] = sum(
+        bool(r.get('cost_present'))
+        for doc in parsed['private_normalized_docs'] for r in doc['records'])
+    summary['records_cost_tax_unknown'] = sum(
+        bool(r.get('cost_present')) and r.get('cost_tax_mode') == 'unknown'
+        for doc in parsed['private_normalized_docs'] for r in doc['records'])
+    summary['native_export_cost_flags_suppressed'] = suppressed
     summary.update({
         'schema_version': SCHEMA_VERSION,
         'mode': MODE,
