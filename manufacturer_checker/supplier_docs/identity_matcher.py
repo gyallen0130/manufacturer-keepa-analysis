@@ -59,7 +59,7 @@ def mark_duplicate_jan_headers(records, header):
             or not all(isinstance(item, dict) for item in records)):
         raise ValueError('invalid supplier header or records')
     tokens = [
-        re.sub(r'[\\s_\\-・/()\\[\\]:：]+', '',
+        re.sub(r'[\s_\-・/()\[\]:：]+', '',
                unicodedata.normalize('NFKC', str(cell or '')).casefold())
         for cell in header
     ]
