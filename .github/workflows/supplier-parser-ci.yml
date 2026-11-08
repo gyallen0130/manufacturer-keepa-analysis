@@ -45,6 +45,16 @@ jobs:
           KEEPA_API_KEY: ""
           DRIVE_PARENT_FOLDER_ID: ""
         run: python -m unittest discover -s tests -v
+      - name: Export public supplier parser source for private offline E2E validation
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-supplier-parser-source-snapshot
+          path: |
+            manufacturer_checker/supplier_docs/*.py
+            manufacturer_checker/requirements.txt
+          retention-days: 1
+          if-no-files-found: error
+
       - name: Simulate safe crash-recovery dry run (synthetic only)
         working-directory: manufacturer_checker
         env:
