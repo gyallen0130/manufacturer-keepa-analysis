@@ -13,19 +13,24 @@ def load_template():
             "supplier_docs" / "templates" / "supplier-readonly.yml"
             ).read_text(encoding="utf-8")
 
+def load_lock():
+    return (Path(__file__).resolve().parents[1] /
+            "supplier_docs" / "approved-requirements-hashed.txt"
+            ).read_text(encoding="utf-8")
+
 
 class PrivateWorkflowReviewTests(unittest.TestCase):
     def test_real_inactive_template_pins_four_action_shas(self):
-        report = review_private_workflow_template(load_template())
+        report = review_private_workflow_template(load_template(), dependency_lock=load_lock())
         checks = report["checks"]
         self.assertTrue(checks["official_actions_full_commit_sha_pinned"])
         self.assertTrue(checks["manual_private_only_structural_gate"])
         self.assertTrue(checks["least_privilege_workflow_permissions_present"])
         self.assertTrue(checks["encrypted_artifact_only_structural_gate"])
-        # Live execution MUST remain blocked until wheel hashes are fixed.
-        self.assertFalse(checks["python_dependency_hash_lock_present"])
-        self.assertEqual(report["status"],
-                         "blocked_on_workflow_or_dependency_review")
+        # Hashes pass structural review, but cloud credentials, IAM, billing
+        # and independent source/Action review remain unverified.
+        self.assertTrue(checks["python_dependency_hash_lock_present"])
+        self.assertEqual(report["status"], "eligible_for_separate_live_review")
         self.assertFalse(report["real_google_wif_verified"])
         self.assertFalse(report["automatic_workflow_enabled"])
         self.assertFalse(report["additional_cost_guaranteed_zero"])
@@ -82,14 +87,19 @@ class PrivateWorkflowReviewTests(unittest.TestCase):
             self.assertFalse(
                 report["checks"]["encrypted_artifact_only_structural_gate"])
 
-    def test_demo_requires_real_hash_lock_not_just_comment(self):
+    def test_lock_absence_or_tampering_blocks_workflow_approval(self):
         template = load_template()
-        report = review_private_workflow_template(template)
-        self.assertFalse(report["checks"]["python_dependency_hash_lock_present"])
-        # A random comment mentioning hash flags must not satisfy the check.
-        # This is a conservative substring preflight, not a YAML validator:
-        # a future deployable workflow requires a stronger content audit.
-        self.assertFalse(report["reviewed_commit_and_dependency_contents_attested"])
+        self.assertFalse(review_private_workflow_template(
+            template)["checks"]["python_dependency_hash_lock_present"])
+        tampered = load_lock().replace("--hash=sha256:", "--hash=md5:", 1)
+        denied = review_private_workflow_template(
+            template, dependency_lock=tampered)
+        self.assertFalse(denied["checks"]["python_dependency_hash_lock_present"])
+        valid = review_private_workflow_template(
+            template, dependency_lock=load_lock())
+        self.assertTrue(valid["checks"]["python_dependency_hash_lock_present"])
+        self.assertFalse(valid["reviewed_commit_and_dependency_contents_attested"])
+        self.assertFalse(valid["real_google_wif_verified"])
 
     def test_empty_oversized_and_non_string_file_denied(self):
         for content in ("", "x" * 30001, None):
