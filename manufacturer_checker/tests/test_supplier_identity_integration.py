@@ -5,7 +5,7 @@ No Google Drive, Keepa, SP-API, customer/quote data, network or I/O.
 import unittest
 
 from supplier_docs.parser import parse_rows
-from supplier_docs.identity_matcher import compare_supplier_rows
+from supplier_docs.identity_matcher import compare_supplier_rows, mark_duplicate_jan_headers
 
 
 def make_gtin(prefix):
@@ -60,6 +60,16 @@ class SupplierIdentityIntegrationTests(unittest.TestCase):
         self.assertEqual(outcome['public_summary']['status_counts']['id_candidate'], 1)
         self.assertIn('jan_columns_require_review',
                       outcome['private_pairs'][0]['evidence_codes'])
+
+
+    def test_parser_then_header_provenance_guard(self):
+        a = parsed()['records']
+        b = parsed()['records']
+        copied = mark_duplicate_jan_headers(
+            b, ['メーカー', '商品名', 'JAN', 'ASIN', 'JAN'])
+        result = compare_supplier_rows(a, copied)
+        self.assertEqual(result['public_summary']['status_counts']['id_candidate'], 1)
+        self.assertEqual(result['public_summary']['status_counts']['strong_candidate'], 0)
 
 
 if __name__ == '__main__':
