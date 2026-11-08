@@ -135,6 +135,22 @@ def normalize_selected_sources(specs):
     }
 
 
+
+def validate_source_lookup(field, query):
+    """Validate a private lookup BEFORE any data read in a connector bridge."""
+    key = LOOKUP_ALIASES.get(field, field) if isinstance(field, str) else None
+    if key not in LOOKUP_FIELDS or not isinstance(query, str):
+        raise ValueError('unsupported lookup field or query')
+    needle = _text(query)
+    if len(needle) < 3 or len(needle) > 120:
+        raise ValueError('search query must be 3-120 characters')
+    if key == 'jan_string' and not _JAN.fullmatch(query.strip()):
+        raise ValueError('JAN lookup requires exact 8-14 ASCII digits')
+    if key == 'asin_candidate' and not _ASIN.fullmatch(query.strip().upper()):
+        raise ValueError('ASIN lookup requires a 10-character alphanumeric ID')
+    return key, needle
+
+
 def search_selected_sources(normalized, *, field, query):
     """Search local PRIVATE normalized documents; no automatic Drive scan.
 
@@ -148,16 +164,7 @@ def search_selected_sources(normalized, *, field, query):
     docs = normalized['private_normalized_docs']
     if not 1 <= len(docs) <= MAX_SOURCES:
         raise ValueError('invalid selected source count')
-    key = LOOKUP_ALIASES.get(field, field)
-    if key not in LOOKUP_FIELDS or not isinstance(query, str):
-        raise ValueError('unsupported lookup field or query')
-    needle = _text(query)
-    if len(needle) < 3 or len(needle) > 120:
-        raise ValueError('search query must be 3-120 characters')
-    if key == 'jan_string' and not _JAN.fullmatch(query.strip()):
-        raise ValueError('JAN lookup requires exact 8-14 ASCII digits')
-    if key == 'asin_candidate' and not _ASIN.fullmatch(query.strip().upper()):
-        raise ValueError('ASIN lookup requires a 10-character alphanumeric ID')
+    key, needle = validate_source_lookup(field, query)
 
     hits = []
     # Bound cumulative iteration and returned evidence. If too many hits,
