@@ -113,6 +113,8 @@ def plan_review_retries(previous, current, *, receipts, signing_key,
     for record in receipts:
         if not isinstance(record, dict) or set(record) != fields:
             raise ValueError('invalid review receipt format')
+        if any(not isinstance(record[field], str) for field in fields):
+            raise ValueError('review receipt fields must be strings')
         if record['schema_version'] != RECEIPT_SCHEMA:
             raise ValueError('unsupported review receipt version')
         if (record['reviewer_id'] not in allowed_reviewers
