@@ -140,7 +140,7 @@ def inspect_selected_local_excel(*, root_dir, manifest, search=None):
             if worksheet.sheet_state != 'visible':
                 raise ValueError('hidden Excel tab cannot be scanned')
 
-        for path, relative, tab, kind, header in paths:
+        for path, relative, tab, kind, header, tiered_mapping in paths:
             ws = opened[path][tab]
             rows = [list(row) for row in ws.iter_rows(
                 min_row=1, max_row=MAX_ROWS, min_col=1,
