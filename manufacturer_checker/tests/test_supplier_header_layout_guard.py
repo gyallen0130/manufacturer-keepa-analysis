@@ -32,7 +32,7 @@ class SupplierHeaderLayoutTests(unittest.TestCase):
         self.assertNotIn('duplicate_jan_heading', result['warnings'])
 
     def test_blacks_sixteen_row_preamble_two_price_hints(self):
-        rows = [[] for _ in range(15)]
+        rows = [[] for _ in range(16)]
         rows[15] = ['商品名', '卸値税抜', '卸値税込', '定価',
                     '概算利益', '利益率', '', 'JANコード']
         result = inspect_header_layout(rows)
