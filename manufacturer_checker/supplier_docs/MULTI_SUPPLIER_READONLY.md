@@ -89,6 +89,18 @@ approved_private = {
 
 2026-11-08、ChatGPTからは**井上・ワコーフーズ・ヨシダ・イトウの実原本A1:O40をFORMULA形式で限定読取**してセルの型・見出し・数式の存在を個別確認。とくにワコーフーズは**G列「卸値」・I列「卸値（税込）」**の両方が価格候補で、共通パーサーが勝手に単価列を決めない必要がある。**この実資料確認はChatGPTコネクタ上の限定検査であり、新しいPython接続関数を実原本のGoogle API資格情報で実行したものではない**。コードの接続部分については[Google Sheets v4模擬サービスのテスト](../tests/test_supplier_sheets_multi_bridge.py)13件を追加した。
 
+## 4社実資料のJAN/ASINを限定横断比較（ChatGPT接続・2026-11-08）
+
+実Google Sheetsの4タブ（井上、ワコーフーズ、ヨシダ、イトウ）をそれぞれ`A1:O40`・`FORMULA`で読み、**ChatGPTのコネクタを使った一時的な比較処理**でJAN・ASINの重複候補を確認した。各資料の商品名/JAN非空の候補は38/6/39/6行、数値型JANは9/6/39/6行、形式上のASINがあるのは0/3/35/6行だった。
+
+**この限定4タブ・計89候補行において、異なる取引先間の共通JAN/ASIN候補は0件。** 調べた4タブ以外・40行を超える範囲・メーカー別タブを検索していないので、全社の商品重複がないと解釈しない。数値型JANには先頭0消失の恐れがあり、チェックデジット形式だけでSKU確定としない。
+
+これは**新Python`sheets_multi_bridge.py`に実データを通した結果ではない**。そのコードは架空データのテスト済みで、実認証クライアントによるPython E2Eは引き続き未実施。実値をGitHubに載せていない。匿名詳細：[Private共通知識の実資料比較記録](https://github.com/gyallen0130/amazon-business-knowledge/blob/main/suppliers/pilots/four-supplier-live-cross-lookup-2026-11-08.md)。
+
+### 未解析タブで全件検索を止めない
+
+`multi_source_readonly.normalize_selected_sources`は**あらかじめ指定された一部資料が空、または見出しを検出できなかった場合**でもほかの資料を処理し、`source_status_counts`（`parsed`、`empty`、`needs_review`）を匿名で返すよう改修した。検索時も`sources_with_parsed_headers`／`sources_not_searchable`を区別し、0件ヒットから「商品なし」と判断しない。予期しないパーサーエラーは隠さず停止する。架空の失敗・正常を混ぜた**4件のテストを追加**。
+
 ## CIと実運用の線引き
 
 2026-11-08に調べた4社の**列見出し構造を模した架空の商品データ**を[15件のテスト](../tests/test_supplier_multi_source_readonly.py)で正規化・照会する。実JAN/価格・取引先の個別商品をCIへ渡さない。結果は正規化できる形のソフトウェア上の実証であり、**実際の4社の全商品行をプログラムに投入する一連の実運用試験ではない**。
