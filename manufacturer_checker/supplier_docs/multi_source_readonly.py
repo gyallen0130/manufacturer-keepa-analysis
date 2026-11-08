@@ -12,6 +12,8 @@ import unicodedata
 
 from .parser import DOCUMENT_TYPES, parse_rows
 from .header_layout_guard import inspect_header_layout
+from .tiered_header_mapping import (map_explicit_tiered_headers,
+                                    validate_tiered_mapping_schema)
 
 MAX_SOURCES = 5
 MAX_ROWS_PER_SOURCE = 200
@@ -57,6 +59,11 @@ def _check_specs(specs):
                 or (header is not None and
                     (type(header) is not int or not 1 <= header <= len(rows)))):
             raise ValueError('invalid or oversized selected source')
+        tiered = s.get('tiered_mapping')
+        if tiered is not None:
+            validate_tiered_mapping_schema(tiered)
+            if header is not None:
+                raise ValueError('explicit single-row header conflicts with tiered mapping')
         source_key = (file_id, sheet)
         if source_key in seen:
             raise ValueError('duplicate source selected')
@@ -78,7 +85,8 @@ def normalize_selected_sources(specs):
     normalized = []
     mapped_coverage = {}
     ambiguous_field_source_counts = {}
-    source_status_counts = {'parsed': 0, 'empty': 0, 'needs_review': 0}
+    source_status_counts = {'parsed': 0, 'empty': 0, 'needs_review': 0,
+                            'mapped_review': 0}
     header_layout_counts = {
         'single_row': 0, 'multi_row_needs_review': 0,
         'no_reliable_header': 0, 'empty': 0,
@@ -100,8 +108,22 @@ def normalize_selected_sources(specs):
             'duplicate_jan_heading' in layout['warnings'])
         multiple_price_header_sources += (
             'multiple_price_hints' in layout['warnings'])
+        if spec.get('tiered_mapping') is not None and layout['status'] != 'multi_row_needs_review':
+            # Never let unreviewed, single-line, or wrong-source documents
+            # silently activate a mapping prepared for a different layout.
+            raise ValueError('tiered mapping requires multi-row header evidence')
         if layout['status'] == 'multi_row_needs_review':
-            status, result = 'needs_review', None
+            if spec.get('tiered_mapping') is None:
+                status, result = 'needs_review', None
+            else:
+                result = map_explicit_tiered_headers(
+                    rows, spec['tiered_mapping'],
+                    document_type=spec['document_type'],
+                    source_file_id=spec['source_file_id'],
+                    source_url=spec.get('source_url', ''),
+                    source_sheet=spec['source_sheet'],
+                )
+                status = 'mapped_review'  # NEVER equivalent to parsed.
         elif not rows or not any(
                 cell is not None and str(cell).strip()
                 for row in rows for cell in row):
@@ -173,6 +195,7 @@ def normalize_selected_sources(specs):
             'sources_with_duplicate_jan_headers': duplicate_jan_header_sources,
             'sources_with_multiple_price_hints': multiple_price_header_sources,
             'all_selected_windows_parsed': source_status_counts['parsed'] == len(normalized),
+            'sources_with_review_only_candidates': source_status_counts['mapped_review'],
             'rows_scanned': totals['rows_scanned'],
             'record_count': totals['records'],
             'warning_count': totals['warnings'],
@@ -261,7 +284,8 @@ def search_selected_sources(normalized, *, field, query):
         'public_summary': {
             'sources_searched': len(docs),
             'sources_with_parsed_headers': sum(d.get('source_status', 'parsed') == 'parsed' for d in docs),
-            'sources_not_searchable': sum(d.get('source_status', 'parsed') != 'parsed' for d in docs),
+            'sources_with_review_only_candidates': sum(d.get('source_status') == 'mapped_review' for d in docs),
+            'sources_not_searchable': sum(d.get('source_status', 'parsed') not in ('parsed', 'mapped_review') for d in docs),
             'records_examined': examined,
             'hits_returned': len(hits),
             'results_truncated': matches_capped,
