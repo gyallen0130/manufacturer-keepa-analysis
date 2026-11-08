@@ -41,3 +41,61 @@ jobs:
           python -m supplier_docs.job_dry_run --scenario partial_review
           python -m supplier_docs.job_dry_run --scenario cas_committed
           python -m supplier_docs.job_dry_run --scenario cas_conflict
+
+  container-dry-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out PR merge commit without persistent credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build synthetic-only container without publishing it
+        run: |
+          docker build \
+            --file manufacturer_checker/Dockerfile.supplier-docs-dry-run \
+            --tag supplier-docs-dry-run:ci \
+            manufacturer_checker
+      - name: Verify non-root and no-network read-only recovery simulation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(docker image inspect --format '{{.Config.User}}' supplier-docs-dry-run:ci)" = '10001:10001'
+          for scenario in after_scan partial_review all_reviewed cas_committed cas_conflict unchanged; do
+            output="$(docker run --rm --network none --read-only \
+              --cap-drop ALL --security-opt no-new-privileges \
+              --pids-limit 32 --memory 256m --cpus 1 \
+              supplier-docs-dry-run:ci --scenario "$scenario")"
+            echo "$output" | SCENARIO="$scenario" python3 -c '
+          import json, os, sys
+          d = json.load(sys.stdin)
+          assert d["scenario"] == os.environ["SCENARIO"]
+          assert d["mode"] == "synthetic_offline_dry_run"
+          assert d["summary"]["cloud_api_calls"] == 0
+          assert not d["summary"]["baseline_advanced_by_this_check"]
+          assert "fake_sheet_" not in json.dumps(d)
+          assert "fake_folder_" not in json.dumps(d)
+          '
+          done
+      - name: Reject live flags and disallowed modules inside container
+        shell: bash
+        run: |
+          set -euo pipefail
+          if docker run --rm --network none --read-only \
+            --cap-drop ALL --security-opt no-new-privileges \
+            supplier-docs-dry-run:ci --live >/dev/null 2>&1; then
+            echo "Unsafe live flag was accepted" >&2
+            exit 1
+          fi
+          docker run --rm --network none --read-only \
+            --cap-drop ALL --security-opt no-new-privileges \
+            --entrypoint python supplier-docs-dry-run:ci -c '
+          import os
+          from pathlib import Path
+          assert os.geteuid() == 10001
+          base = Path("/app/supplier_docs")
+          for module in ("auth.py", "cloud_state.py", "change_processor.py",
+                         "review_journal.py", "cli.py"):
+              assert not (base / module).exists(), module
+          assert not Path("/app/manufacturer_checker").exists()
+          '
