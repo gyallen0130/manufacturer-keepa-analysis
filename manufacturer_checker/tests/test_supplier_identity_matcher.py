@@ -3,7 +3,7 @@ import copy
 import json
 import unittest
 
-from supplier_docs.identity_matcher import compare_supplier_rows, _gtin
+from supplier_docs.identity_matcher import compare_supplier_rows, _gtin, mark_duplicate_jan_headers
 
 
 def jan(prefix='000000000001'):
@@ -160,6 +160,35 @@ class SupplierIdentityTests(unittest.TestCase):
         self.assertEqual(result['private_pairs'][0]['status'], 'strong_candidate')
         self.assertNotIn('jan_columns_require_review',
                          result['private_pairs'][0]['evidence_codes'])
+
+
+    def test_duplicate_jan_headers_are_detected_without_value_reading(self):
+        items = [row()]
+        pristine = copy.deepcopy(items)
+        marked = mark_duplicate_jan_headers(
+            items, ['商品名', 'JAN', 'ASIN', 'ＪＡＮコード', '入数'])
+        self.assertEqual(items, pristine)
+        self.assertIsNot(items[0], marked[0])
+        self.assertIs(marked[0]['jan_source_ambiguous'], True)
+        result = compare_supplier_rows(items, marked)
+        self.assertEqual(result['private_pairs'][0]['status'], 'id_candidate')
+        self.assertIn('jan_columns_require_review',
+                      result['private_pairs'][0]['evidence_codes'])
+
+    def test_unique_jan_header_does_not_trigger_ambiguity(self):
+        items = mark_duplicate_jan_headers(
+            [row()], ['商品名', 'JAN', 'ASIN', 'JAN備考'])
+        self.assertNotIn('jan_source_ambiguous', items[0])
+        result = compare_supplier_rows([row()], items)
+        self.assertEqual(result['private_pairs'][0]['status'],
+                         'strong_candidate')
+
+    def test_empty_and_invalid_jan_header_provenance(self):
+        self.assertEqual(mark_duplicate_jan_headers([], ['JAN', 'JAN']), [])
+        with self.assertRaises(ValueError):
+            mark_duplicate_jan_headers([row()], ['JAN'] * 101)
+        with self.assertRaises(ValueError):
+            mark_duplicate_jan_headers([None], ['JAN'])
 
 
 if __name__ == '__main__':
