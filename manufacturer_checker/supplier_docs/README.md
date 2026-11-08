@@ -4,6 +4,10 @@ Google Driveのメーカー／卸問屋別フォルダにある見積書・商�
 
 **対象**：.xlsx / .xlsm / .csv / .tsv と、Google Sheets v4の values.get が返す2次元配列。PDF解析、Driveの全フォルダ巡回、定期同期、Keepa照合、利益再計算、発注は未実装です。
 
+## 追加：同名のJAN列を持つ見積資料の監査（オフライン試験版）
+
+[quote_jan_audit.py](quote_jan_audit.py) は、原本に2つの「JAN」見出しがある場合に、**明示的に指定した列位置**で表示上の一致／相違／過去の「廃番」等の注意記載／未読を区別する。どちらが現在の商品JANかを推測で決めず、数値型セルを確定JANに変換しない。結果は匿名件数と、非公開で照合する原本の行番号・理由コードに分離する。詳細は[IDENTITY_MATCH_READONLY.md](IDENTITY_MATCH_READONLY.md)。
+
 ## 追加：複数原本の商品候補照合（オフライン試験版）
 
 新たに[`identity_matcher.py`](identity_matcher.py)を追加しました。既存[`parser.parse_rows`](parser.py)などから得た**2つの解析済みレコード列**を受け取り、JAN・ASIN・商品名、任意の型番・容量・入数を保守的に比較します。**見出しに複数のJAN列がある場合は**、元見出しに対して`mark_duplicate_jan_headers(records, header_row)`を実行して判定を弱める。Excelの数値型JANは先頭0喪失の可能性があるため、そのままJAN文字列とはしない。結果は`strong_candidate / id_candidate / name_only / conflict`などの**候補判定**であり、販売可能SKUの自動確定や仕入許可ではありません。多対多の一致は降格、矛盾は`conflict`として保持します。
