@@ -150,6 +150,23 @@ python -m supplier_docs.job_dry_run --scenario unchanged
 
 **残る本番導入要件**：Cloud Run用のコンテナ化、Cloud Run Jobの実行環境、専用IAM・Secret・Cloud Storage、書き込みロック／クラッシュ復旧と2オブジェクト間の整合性保証、実フォルダの追加閲覧権限、本人確認を伴う承認画面、実データでの統合テスト。これらはまだ設定・実行していません。既存のSP-API本番リソースは変更していません。
 
+## ドライラン専用コンテナ（開発用、非デプロイ）
+
+`manufacturer_checker/Dockerfile.supplier-docs-dry-run` は **架空データの障害復旧シミュレーション専用**です。`Dockerfile.supplier-docs-dry-run.dockerignore` でビルド対象を最小化し、`supplier_docs` のうちテストに必要な7ファイルだけを同梱します。Google Cloud認証・Drive API・Keepa・SP-API関連モジュール、取引先資料、実ファイルIDは同梱しません。
+
+実行時はLinuxの非rootユーザー（UID 10001）で `python -m supplier_docs.job_dry_run` を起動します。`--live` や自動承認用の引数は存在しません。Cloud Run Jobへのデプロイ、実GCPへのアクセス、Schedulerの有効化、Secretやバケットの作成は一切行っていません。
+
+開発環境にDockerがある場合の**ネットワーク遮断・読み取り専用**試験例：
+
+```bash
+docker build -f manufacturer_checker/Dockerfile.supplier-docs-dry-run -t supplier-docs-dry-run:local manufacturer_checker
+docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges supplier-docs-dry-run:local --scenario after_scan
+```
+
+Draft PR用GitHub Actionsは別ジョブでコンテナを**ビルドするだけ**で、レジストリにpushしません。ネットワークを遮断した実行コンテナで6種類の障害ケースを検証し、機密IDが出力されないこと、UID 10001・除外された認証モジュール・危険なCLIオプションを確認します。
+
+**限界**：これは本番用のGoogle Cloudワーカーではなく、復旧ロジックの安全な実行単位を先に確立するものです。実導入には、別途安全なワーカーイメージ・最小権限IAM・Google Cloudのリソース作成、クラッシュ時の状態整合性・バックアップ・レビュー本人認証を検証する必要があります。OSイメージと依存パッケージの固定・脆弱性検査も本番前の必須作業です。
+
 ## 安全なAPI接続の試運転
 
 上の鍵なし代理認証手順に従い、まず1シートの40行以内だけを `--summary-only` で試験してください。サービスアカウントはViewer権限のみ、トークンは15分の `spreadsheets.readonly` スコープです。
