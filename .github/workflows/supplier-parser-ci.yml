@@ -42,6 +42,12 @@ jobs:
           python -m supplier_docs.job_dry_run --scenario cas_committed
           python -m supplier_docs.job_dry_run --scenario cas_conflict
 
+      - name: Test manual-only supplier Apps Script offline (no Google credentials)
+        env:
+          KEEPA_API_KEY: ""
+          DRIVE_PARENT_FOLDER_ID: ""
+        run: node --test manufacturer_checker/free_monitor/tests/monitor.test.cjs
+
   container-dry-run:
     runs-on: ubuntu-latest
     timeout-minutes: 15
