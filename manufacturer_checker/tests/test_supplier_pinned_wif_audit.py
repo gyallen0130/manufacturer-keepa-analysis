@@ -11,6 +11,7 @@ from supplier_docs.pinned_wif_audit import (
 )
 
 SHA = 'a' * 40
+SOURCE_SHA = 'b' * 40
 REPO = 'fake-owner/fake-private-supplier-reader'
 ID = '12345678901'
 OWNER_ID = '876543210'
@@ -75,7 +76,7 @@ def snapshots():
             'attribute.repository_visibility': 'assertion.repository_visibility',
             'attribute.runner_environment': 'assertion.runner_environment',
         },
-        'attributeCondition': expected_pinned_provider_condition(cfg, SHA),
+        'attributeCondition': expected_pinned_provider_condition(cfg, SHA, SOURCE_SHA),
     }
     policy = {'bindings': [{
         'role': 'roles/iam.workloadIdentityUser',
@@ -101,6 +102,7 @@ def audit(*, settings_override=None, github_override=None,
         i.update(iam_override)
     return review_observed_reader_wif(
         settings=s, reviewed_workflow_sha=sha,
+        reviewed_source_commit_sha=SOURCE_SHA,
         observed_github_repo=g, observed_provider=p,
         observed_reader_iam_policy=i)
 
@@ -110,7 +112,7 @@ class PinnedGCPWIFTests(unittest.TestCase):
         out = audit()
         self.assertEqual(
             out['status'], 'eligible_for_separate_manual_connection_review')
-        self.assertTrue(out['workflow_sha_pinned_to_reviewed_commit'])
+        self.assertTrue(out['workflow_sha_and_source_commit_pinned'])
         self.assertTrue(out['github_branch_is_unprotected'])
         self.assertFalse(out['checks']['branch_protection_verified'])
         self.assertTrue(out['manual_code_and_dependency_integrity_review_still_required'])
@@ -119,7 +121,7 @@ class PinnedGCPWIFTests(unittest.TestCase):
         self.assertFalse(out['google_iam_changed'])
         self.assertFalse(out['additional_cost_guaranteed_zero'])
         summary = json.dumps(out)
-        for value in (REPO, ID, OWNER_ID, PROVIDER, SA, SHA):
+        for value in (REPO, ID, OWNER_ID, PROVIDER, SA, SHA, SOURCE_SHA):
             self.assertNotIn(value, summary)
 
     def test_changes_to_workflow_commit_or_provider_expression_fail(self):
@@ -127,7 +129,8 @@ class PinnedGCPWIFTests(unittest.TestCase):
             'assertion.repository_id=="12345678901"',
             snapshots()[2]['attributeCondition'].replace(
                 "assertion.workflow_sha=='" + SHA + "'", ''),
-            snapshots()[2]['attributeCondition'].replace(SHA, 'b'*40),
+            snapshots()[2]['attributeCondition'].replace(SHA, 'c'*40),
+            snapshots()[2]['attributeCondition'].replace(SOURCE_SHA, 'c'*40),
             snapshots()[2]['attributeCondition'] + " || true",
         ):
             with self.subTest(condition=condition[:20]):
@@ -190,6 +193,7 @@ class PinnedGCPWIFTests(unittest.TestCase):
         })
         out = review_observed_reader_wif(
             settings=cfg, reviewed_workflow_sha=SHA,
+            reviewed_source_commit_sha=SOURCE_SHA,
             observed_github_repo=gh, observed_provider=provider,
             observed_reader_iam_policy=policy)
         self.assertFalse(out['all_google_reader_iam_grants_reviewed'])
@@ -209,6 +213,7 @@ class PinnedGCPWIFTests(unittest.TestCase):
             with self.subTest(x=observed), self.assertRaises(ValueError):
                 review_observed_reader_wif(
                     settings=settings(), reviewed_workflow_sha=SHA,
+                    reviewed_source_commit_sha=SOURCE_SHA,
                     observed_github_repo=observed,
                     observed_provider=snapshots()[2],
                     observed_reader_iam_policy=snapshots()[3])
@@ -220,10 +225,10 @@ class PinnedGCPWIFTests(unittest.TestCase):
         self.assertTrue(result['manual_code_and_dependency_integrity_review_still_required'])
 
     def test_pinned_condition_includes_all_expected_identity_claims(self):
-        expected = expected_pinned_provider_condition(settings(), SHA)
+        expected = expected_pinned_provider_condition(settings(), SHA, SOURCE_SHA)
         for part in (
             'repository_owner_id', 'repository_id', 'workflow_ref',
-            'workflow_sha', 'repository_visibility', 'runner_environment',
+            'workflow_sha', 'sha', 'repository_visibility', 'runner_environment',
             'workflow_dispatch', 'refs/heads/main', SHA,
         ):
             self.assertIn(part, expected)
