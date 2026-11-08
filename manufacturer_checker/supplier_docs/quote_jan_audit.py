@@ -8,6 +8,8 @@ in the output. Use only in an authorized private data processing context.
 from collections import Counter
 import unicodedata
 
+from .parser import NORMALIZED_ALIASES, normalize_header
+
 MAX_ROWS = 250
 MAX_COLUMNS = 32
 HISTORICAL_UNAVAILABLE = frozenset({
@@ -19,6 +21,35 @@ CODES = (
     'historical_unavailable_note',
     'missing_or_unreadable',
 )
+
+
+def summarize_jan_header_structure(header):
+    """Inspect headings only; never read a product row or infer the correct JAN.
+
+    This allows callers to skip the special duplicate-JAN audit for ordinary
+    single-JAN supplier tables, instead of applying Ito-specific assumptions
+    to every vendor. Outputs only anonymous metadata.
+    """
+    if (not isinstance(header, (list, tuple))
+            or len(header) > MAX_COLUMNS
+            or any(not isinstance(x, (str, int, float, type(None)))
+                   or isinstance(x, bool) for x in header)):
+        raise ValueError('invalid supplier heading cells')
+    aliases = NORMALIZED_ALIASES['jan_string']
+    count = sum(normalize_header(v) in aliases for v in header)
+    if count == 0:
+        status = 'missing'
+    elif count == 1:
+        status = 'single'
+    else:
+        status = 'duplicate_needs_review'
+    return {
+        'jan_header_count': count,
+        'status': status,
+        'jan_roles_verified': False,
+        'product_rows_read': 0,
+        'source_writes': 0,
+    }
 
 
 def _word(value):
