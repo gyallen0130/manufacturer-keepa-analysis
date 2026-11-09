@@ -56,7 +56,26 @@ def inspect_private_connector_mixed(*, root_dir, excel_manifest,
         [excel, sheets], search=search)
 
     aggregate = dict(combined['public_summary'])
+    # The parser can preserve numeric JANs as SEARCH CANDIDATES with a warning.
+    # A numeric cell may have lost a leading zero; never treat the identifier
+    # as a verified product identity. Only publish the warning COUNT.
+    numeric_jan_warnings = sum(
+        'JAN_NUMERIC_CELL' in warning.get('codes', [])
+        for doc in combined['private_normalized_docs']
+        for warning in doc.get('warnings', [])
+    )
+    # Exported native Sheets can differ from live FORMULA values. A claimed
+    # native export is NEVER evidence of complete formula fidelity or a
+    # trustworthy supplier price/lot, even if parsing succeeded.
+    exported_sheet_count = sum(
+        source['snapshot_method'] == 'native_export_xlsx'
+        for source in connector_sheet_manifest['sources']
+    )
     aggregate.update({
+        'numeric_jan_candidates_require_review': numeric_jan_warnings,
+        'native_sheet_exports_require_formula_review': exported_sheet_count,
+        'native_export_price_or_lot_trust_allowed': False,
+        'source_formula_fidelity_verified': False,
         'upstream_connector_cells_read_by_this_function': 0,
         'upstream_connector_auth_verified_by_this_function': False,
         'python_google_api_auth_verified': False,
