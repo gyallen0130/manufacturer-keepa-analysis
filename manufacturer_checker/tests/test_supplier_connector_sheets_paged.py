@@ -179,8 +179,11 @@ class PagedSourceTests(unittest.TestCase):
         ]
         result=self.private(conf=manifest(sources=[src]),search={'field':'jan','query':JAN})
         self.assertEqual(result['matched_hits_total'],26)
+        self.assertEqual(result['hits_displayed'],20)
+        self.assertTrue(result['hits_truncated_for_review'])
         self.assertEqual(result['private_hits'][0]['original_physical_row'],41)
-        self.assertEqual(result['private_hits'][-1]['original_physical_row'],66)
+        # PRIVATE detail display is deliberately capped at 20 records.
+        self.assertEqual(result['private_hits'][-1]['original_physical_row'],60)
 
     def test_header_formula_counted_once_even_when_repeated_for_parsing(self):
         conf=manifest()
