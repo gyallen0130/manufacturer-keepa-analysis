@@ -1,0 +1,73 @@
+"""Manual, privacy-preserving Excel + authenticated-connector Sheet snapshot probe.
+
+The caller obtains explicitly selected Sheet cell matrices via an already
+authorized connector OUTSIDE this module, then passes them in memory. No
+tokens, Google API calls, file discovery, writes or network occur here.
+The caller must not print or persist the supplied snapshots or any private
+rows. Only the aggregate dictionaries returned here are shareable.
+"""
+from .connector_sheet_snapshot import (
+    normalize_selected_connector_snapshots, SCHEMA_VERSION as SNAPSHOT_VERSION,
+    MODE as SNAPSHOT_MODE,
+)
+from .local_excel_bridge import (
+    inspect_selected_local_excel, validate_excel_manifest,
+)
+from .mixed_source_readonly import combine_selected_source_results
+from .multi_source_readonly import MAX_SOURCES, validate_source_lookup
+
+
+def inspect_private_connector_mixed(*, root_dir, excel_manifest,
+                                    connector_sheet_manifest, search=None):
+    """Combine authorized in-memory Sheet windows and local Excel (<=5 tabs).
+
+    No auth is acquired or verified. Use an independently authorized connector
+    for the Sheet windows, A1:O40 maximum, and keep the raw arrays private.
+
+    The function returns public summaries ONLY; downstream source rows and
+    detailed hits are discarded. A zero local API count never means the caller
+    did not perform an upstream connector read.
+    """
+    selected_excel = validate_excel_manifest(excel_manifest)
+    if (not isinstance(connector_sheet_manifest, dict)
+            or set(connector_sheet_manifest) != {
+                'schema_version', 'mode', 'sources'
+            }
+            or connector_sheet_manifest['schema_version'] != SNAPSHOT_VERSION
+            or connector_sheet_manifest['mode'] != SNAPSHOT_MODE
+            or not isinstance(connector_sheet_manifest['sources'], list)):
+        raise ValueError('invalid private connector source manifest')
+
+    source_count = len(connector_sheet_manifest['sources'])
+    if (not 1 <= source_count <= MAX_SOURCES
+            or len(selected_excel) + source_count > MAX_SOURCES):
+        raise ValueError('five combined source tabs maximum')
+    if search is not None:
+        if not isinstance(search, dict) or set(search) != {'field', 'query'}:
+            raise ValueError('invalid private lookup')
+        validate_source_lookup(search['field'], search['query'])
+
+    # Both source types are validated before any workbook content is read.
+    sheets = normalize_selected_connector_snapshots(
+        manifest=connector_sheet_manifest)
+    excel = inspect_selected_local_excel(
+        root_dir=root_dir, manifest=excel_manifest)
+    combined = combine_selected_source_results(
+        [excel, sheets], search=search)
+
+    aggregate = dict(combined['public_summary'])
+    aggregate.update({
+        'upstream_connector_cells_read_by_this_function': 0,
+        'upstream_connector_auth_verified_by_this_function': False,
+        'python_google_api_auth_verified': False,
+        'sheet_windows_supplied_in_memory': source_count,
+        'profit_calculation_allowed': False,
+        'purchase_allowed': False,
+        'source_writes': 0,
+    })
+    return {
+        'status': 'manual_connector_snapshot_plus_excel_analyzed',
+        'public_summary': aggregate,
+        'public_search_summary': combined.get('public_search_summary'),
+        'private_details_returned': False,
+    }
