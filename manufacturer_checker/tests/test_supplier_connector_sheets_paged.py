@@ -240,5 +240,35 @@ class PagedSourceTests(unittest.TestCase):
         self.assertIsNone(hits[0]['original_row_url'])
 
 
+    def test_unlabeled_profit_inference_may_vary_across_pages_only(self):
+        src=source(pages=0)
+        src['header_rows']=[['商品名','JAN','','']]
+        src['pages']=[
+            {'start_row':2,'end_row':7,
+             'rows':[[f'架空行{r}',JAN,ASIN,'黒字'] for r in range(2,8)]},
+            {'start_row':8,'end_row':13,
+             'rows':[[f'架空行{r}',JAN,ASIN,'未判定'] for r in range(8,14)]},
+        ]
+        result=self.private(conf=manifest(sources=[src]),
+                            search={'field':'asin','query':ASIN})
+        self.assertEqual(result['matched_hits_total'],12)
+        self.assertEqual(result['private_hits'][-1]['original_physical_row'],13)
+        self.assertFalse(result['price_disclosure_allowed'])
+        self.assertFalse(result['profit_calculation_allowed'])
+
+    def test_changed_inferred_asin_column_is_rejected_across_pages(self):
+        src=source(pages=0)
+        src['header_rows']=[['商品名','JAN','','']]
+        src['pages']=[
+            {'start_row':2,'end_row':7,
+             'rows':[[f'架空行{r}',JAN,ASIN,'黒字'] for r in range(2,8)]},
+            {'start_row':8,'end_row':13,
+             'rows':[[f'架空行{r}',JAN,'ASIN不明','未判定']
+                     for r in range(8,14)]},
+        ]
+        with self.assertRaisesRegex(ValueError,'mapping changed'):
+            self.public(conf=manifest(sources=[src]))
+
+
 if __name__ == '__main__':
     unittest.main()
