@@ -66,9 +66,14 @@ def combine_selected_source_results(results, *, search=None):
         api_calls += summary['api_calls']
         origins = original.get('private_origin_manifest')
         if kind == 'excel':
-            if (not isinstance(origins, list)
-                    or len(origins) != len(section)):
-                raise ValueError('Excel source origin mapping unavailable')
+            # Legacy normalized bridge fixtures omit the private file path.
+            # Keep anonymous searches compatible; the private viewer must
+            # reject a missing origin rather than invent a filename.
+            if origins is None:
+                origins = [None] * len(section)
+            elif (not isinstance(origins, list)
+                  or len(origins) != len(section)):
+                raise ValueError('Excel source origin mapping inconsistent')
         elif origins is not None:
             raise ValueError('unexpected Sheets origin mapping')
         for index, doc in enumerate(section):
