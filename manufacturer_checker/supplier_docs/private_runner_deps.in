@@ -1,0 +1,5 @@
+# Public package names only; review-only resolution for Linux Python 3.11.
+# Do NOT use this dynamic input directly in a private live supplier workflow.
+google-api-python-client>=2,<3
+google-auth>=2,<3
+cryptography>=42,<47

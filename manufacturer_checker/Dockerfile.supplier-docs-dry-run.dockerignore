@@ -1,0 +1,11 @@
+# Restrict the build context for the synthetic-only Dockerfile.
+# All files are ignored unless explicitly named below.
+**
+!supplier_docs/
+!supplier_docs/__init__.py
+!supplier_docs/parser.py
+!supplier_docs/drive_delta.py
+!supplier_docs/snapshot_store.py
+!supplier_docs/review_gate.py
+!supplier_docs/recovery.py
+!supplier_docs/job_dry_run.py
