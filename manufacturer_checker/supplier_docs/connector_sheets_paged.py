@@ -33,6 +33,7 @@ _SOURCE_KEYS = frozenset((
     'snapshot_method', 'header_rows', 'header_row', 'pages',
 ))
 _PAGE_KEYS = frozenset(('start_row', 'end_row', 'rows'))
+_SOURCE_OPTIONAL_KEYS = frozenset(('data_start_row',))
 
 
 def _text_cells(rows, *, limit):
@@ -64,7 +65,9 @@ def _check_request(manifest, search):
     keys_seen, page_count, row_total = set(), 0, 0
     checked = []
     for source in manifest['sources']:
-        if not isinstance(source, dict) or set(source) != _SOURCE_KEYS:
+        if (not isinstance(source, dict)
+                or not _SOURCE_KEYS <= set(source)
+                or not set(source) <= _SOURCE_KEYS | _SOURCE_OPTIONAL_KEYS):
             raise ValueError('invalid private paged source')
         fid = source['spreadsheet_id']
         tab = source['sheet_name']
@@ -88,7 +91,10 @@ def _check_request(manifest, search):
         if not isinstance(pages, list) or not pages:
             raise ValueError('at least one explicit data range required')
 
-        expected_row = h + 1
+        expected_row = source.get('data_start_row', h + 1)
+        if (type(expected_row) is not int
+                or not h + 1 <= expected_row <= 1000000):
+            raise ValueError('invalid explicit original page starting row')
         validated = []
         for page in pages:
             if not isinstance(page, dict) or set(page) != _PAGE_KEYS:
