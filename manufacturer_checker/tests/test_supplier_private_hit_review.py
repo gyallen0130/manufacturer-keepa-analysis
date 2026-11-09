@@ -253,5 +253,19 @@ class PrivateHitReviewTests(unittest.TestCase):
         self.assertFalse(response['price_disclosure_allowed'])
 
 
+    def test_legacy_private_result_without_excel_origin_rejects_view_only(self):
+        excel = inspect_selected_local_excel(
+            root_dir=self.root, manifest=self.excel)
+        excel.pop('private_origin_manifest')
+        sheets = normalize_selected_connector_snapshots(manifest=self.sheets)
+        combined = combine_selected_source_results(
+            [excel, sheets], search=self.search)
+        self.assertEqual(combined['public_search_summary']['hits_returned'],2)
+        with self.assertRaises(ValueError):
+            prepare_selected_private_hit_review(
+                combined=combined,search=self.search,
+                reviewer_context=PRIVATE_CONTEXT)
+
+
 if __name__ == '__main__':
     unittest.main()
