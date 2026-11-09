@@ -86,3 +86,23 @@ def build_readonly_sheets_service_from_wif_adc():
     credentials, _ = google.auth.default(scopes=[SHEETS_READONLY_SCOPE])
     return build('sheets', 'v4', credentials=credentials,
                  cache_discovery=False)
+
+
+def build_readonly_drive_metadata_service_from_wif_adc():
+    """Build a Drive v3 metadata-only client from approved PRIVATE WIF ADC.
+
+    The GitHub workflow / Cloud host MUST first be independently authorized
+    as the dedicated supplier Reader, not a production SP-API identity.
+    No credential keys or access tokens are returned to caller code.
+
+    This does NOT perform OAuth sign-in, grant IAM, check provider claim
+    conditions or verify per-file shares. Those are mandatory host controls.
+    The client itself is read-only within drive.metadata.readonly scope.
+    """
+    import google.auth
+    from googleapiclient.discovery import build
+
+    credentials, _ = google.auth.default(
+        scopes=[DRIVE_METADATA_READONLY_SCOPE])
+    return build('drive', 'v3', credentials=credentials,
+                 cache_discovery=False)
