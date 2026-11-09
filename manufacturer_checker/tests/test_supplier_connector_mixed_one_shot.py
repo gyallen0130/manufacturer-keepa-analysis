@@ -193,5 +193,29 @@ class ConnectorMixedOneShotTests(unittest.TestCase):
         self.assertFalse(summary['native_export_price_or_lot_trust_allowed'])
 
 
+    def test_live_formula_snapshot_counts_literals_without_executing(self):
+        sheets = deepcopy(self.sheets)
+        sheets['sources'][0]['rows'][1].append('=2+2')
+        result = self.run_probe(connector_sheet_manifest=sheets)
+        summary = result['public_summary']
+        self.assertEqual(summary['formula_cells_in_supplied_sheet_windows'], 1)
+        self.assertTrue(summary['formula_cell_values_not_evaluated'])
+        self.assertFalse(summary['source_formula_fidelity_verified'])
+        self.assertFalse(summary['profit_calculation_allowed'])
+        self.assertNotIn('=2+2', json.dumps(result))
+        self.assertEqual((self.root / 'fake.xlsx').read_bytes(), self.original_bytes)
+
+    def test_native_export_formula_count_is_observed_not_verified(self):
+        sheets = deepcopy(self.sheets)
+        sheets['sources'][0]['snapshot_method'] = 'native_export_xlsx'
+        sheets['sources'][0]['rows'][1].append('=2+2')
+        result = self.run_probe(connector_sheet_manifest=sheets)
+        summary = result['public_summary']
+        self.assertEqual(summary['formula_cells_in_supplied_sheet_windows'], 1)
+        self.assertEqual(summary['native_sheet_exports_require_formula_review'], 1)
+        self.assertFalse(summary['source_formula_fidelity_verified'])
+        self.assertFalse(summary['native_export_price_or_lot_trust_allowed'])
+
+
 if __name__ == '__main__':
     unittest.main()
