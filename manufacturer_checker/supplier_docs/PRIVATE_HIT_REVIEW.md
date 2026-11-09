@@ -82,3 +82,25 @@ private_review = inspect_private_connector_mixed_for_review(
 3. 最後にGitHub Actions→Google WIF→専用Readerの実認証を、費用とアクセス権を確認してから検討する。**現時点では設定・Secrets・IAMを変更しない**。
 
 Claudeは将来的な呼出元と見なし、特定のモデルSDKに依存しないPython関数を使用。Claudeのサービス導入や課金は行わない。
+
+
+## 2026-11-09：原本Excel＋Google Sheetsの実資料でPrivate表示E2E成功
+
+実際の閲覧権を確認済みの株式会社井上Google Sheets「見積もり」タブ（`A1:O40`の**直接FORMULA由来**の私的スナップショット）と、沖縄県物産公社の原本Excel「`A1:O40`」を同じ隔離Pythonプロセスに渡し、**現行開発ブランチの実コード**を起動した。GitHubのソースコードのみを一時的に所有者限定のDriveシートで転送し、転送用シートは削除済み。**実商品値・見積価格・検索したJAN・ファイルIDは公開GitHubに置いていない**。
+
+- 2資料／2タブ、商品候補44行、Sheets原本の数式文字列28件。プライベートなJAN候補照会1件が一致。
+- Excel由来の一致ヒットと、Google Sheets由来の一致ヒット**両方**で、商品名、元タブ、物理行、原本パスまたは原本Sheets URLをPrivateの戻り値に確認した。実JAN・商品名・原価はログへ出していない。
+- 通常の匿名入口を同じ実検索で動かし、個別識別子・原本パス・非公開ヒットの流出なし。数式内容・原価・税・利益はPrivateプレビューからも除外。元のExcelと転送元スナップショットのSHA-256は前後一致。
+- 既存Driveコネクタで現在の見積もりタブの可視性と**正しいGoogle sheetId（gid）**をメタデータ確認し、Sheet由来ヒットの行番号と組み合わせて**元タブの対象行に移動するURL文字列**を生成・検査した。実ブラウザーでクリックする画面や遷移結果はまだ検証していない。
+
+### 行リンクの追加API（あくまでPrivateでのみ）
+
+`inspect_private_connector_mixed_for_review(..., sheet_gid_by_url=...)` へ、**認証済みコネクタのmetadataで実際に確認した** `{original_sheet_url: gid}` 辞書をオプションで渡せる。元Google Sheets URLと行番号から `.../edit#gid=<verified gid>&range=A<row>:O<row>` を `original_row_url` として生成する。Excelヒットや検証済みgidが無いヒットでは`original_row_url=None`。選択されていないURL・bool・負数・範囲外・文字列gidを拒否する。呼出元のmetadata確認はこのPython関数では行えないため、`row_link_gid_verified_by_this_function=False`。原本を編集したりリンクを公開したりはしない。
+
+架空データを使った追加の回帰テスト3件でリンクの正しい構造、不明なタブへのリンク拒否、未取得時に推測リンクを作らないことを検証。**現行GitHub開発ブランチの全テストが成功したことをActionsから別途確認する**。
+
+## 本番展開上の未解決事項
+
+- **ChatGPTの接続済みDriveからこのPrivate Pythonビューアを自動起動し、本人セッション内にリンクを描画する実運用UI/ブリッジはまだ未完成**。このターンは隔離PythonでのPrivateデータ返却とURL生成の実資料E2E。
+- Private Python内のテスト用`reviewer_context`が`True`でも、Google OAuthやチャット本人認証の代替にはならない。外部セッションが原本アクセス権を検査する必要がある。
+- GitHub Actions→Google WIF→専用Readerの実アクセス、112社全ファイルを対象にする本番索引・差分更新も未完了。追加有料サービスや新IAM権限は導入していない。
