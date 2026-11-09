@@ -36,7 +36,7 @@ def combine_selected_source_results(results, *, search=None):
             raise ValueError('invalid private mixed-source search')
         validate_source_lookup(search['field'], search['query'])
 
-    docs, source_kinds, seen = [], [], set()
+    docs, source_kinds, source_origins, seen = [], [], [], set()
     formats = set()
     api_calls = 0
     for original in results:
@@ -64,7 +64,14 @@ def combine_selected_source_results(results, *, search=None):
                 or not 0 <= summary['api_calls'] <= 20):
             raise ValueError('unexpected bridge API activity')
         api_calls += summary['api_calls']
-        for doc in section:
+        origins = original.get('private_origin_manifest')
+        if kind == 'excel':
+            if (not isinstance(origins, list)
+                    or len(origins) != len(section)):
+                raise ValueError('Excel source origin mapping unavailable')
+        elif origins is not None:
+            raise ValueError('unexpected Sheets origin mapping')
+        for index, doc in enumerate(section):
             if (not isinstance(doc, dict)
                     or doc.get('source_status') not in SOURCE_STATUSES
                     or not isinstance(doc.get('source_file_id'), str)
@@ -83,8 +90,31 @@ def combine_selected_source_results(results, *, search=None):
                         or record.get('source_file_id') != doc['source_file_id']
                         or record.get('source_sheet') != doc['source_sheet']):
                     raise ValueError('invalid original-row provenance')
+            if kind == 'excel':
+                origin = origins[index]
+                if (not isinstance(origin, dict)
+                        or set(origin) != {
+                            'relative_path', 'sheet_name', 'source_file_id'
+                        }
+                        or origin['source_file_id'] != doc['source_file_id']
+                        or origin['sheet_name'] != doc['source_sheet']
+                        or not isinstance(origin['relative_path'], str)
+                        or not 1 <= len(origin['relative_path']) <= 300):
+                    raise ValueError('Excel source origin mapping mismatch')
+                selected_origin = {
+                    'source_kind': 'excel',
+                    'relative_path': origin['relative_path'],
+                    'source_sheet': doc['source_sheet'],
+                }
+            else:
+                selected_origin = {
+                    'source_kind': 'sheets',
+                    'source_url': doc.get('source_url', ''),
+                    'source_sheet': doc['source_sheet'],
+                }
             docs.append(doc)
             source_kinds.append(kind)
+            source_origins.append(selected_origin)
     if len(docs) > MAX_SOURCES:
         raise ValueError('combined read exceeds five approved tabs')
 
@@ -125,6 +155,9 @@ def combine_selected_source_results(results, *, search=None):
         'public_summary': summary,
         'private_normalized_docs': docs,
         'private_source_kinds': source_kinds,
+        # The original file path / Sheet URL never enters public_summary.
+        # It is used only by a separately opted-in PRIVATE viewer.
+        'private_source_origins': source_origins,
     }
     if search is not None:
         found = search_selected_sources(merged, **search)
