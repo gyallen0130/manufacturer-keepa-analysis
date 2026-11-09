@@ -97,7 +97,8 @@ def combine_selected_source_results(results, *, search=None):
                     raise ValueError('invalid original-row provenance')
             if kind == 'excel':
                 origin = origins[index]
-                if (not isinstance(origin, dict)
+                if origin is not None and (
+                        not isinstance(origin, dict)
                         or set(origin) != {
                             'relative_path', 'sheet_name', 'source_file_id'
                         }
@@ -108,7 +109,8 @@ def combine_selected_source_results(results, *, search=None):
                     raise ValueError('Excel source origin mapping mismatch')
                 selected_origin = {
                     'source_kind': 'excel',
-                    'relative_path': origin['relative_path'],
+                    'relative_path': (origin['relative_path']
+                                      if origin is not None else None),
                     'source_sheet': doc['source_sheet'],
                 }
             else:
