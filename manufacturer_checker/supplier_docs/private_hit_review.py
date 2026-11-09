@@ -41,7 +41,8 @@ def validate_private_reviewer_context(context):
 
 
 def prepare_selected_private_hit_review(*, combined, search, reviewer_context,
-                                        source_labels=None, max_hits=MAX_REVIEW_HITS):
+                                        source_labels=None, max_hits=MAX_REVIEW_HITS,
+                                        sheet_gid_by_url=None):
     """Prepare bounded selected-source hits for an authenticated private view.
 
     Source labels are declared by the caller after independently checking
@@ -115,6 +116,24 @@ def prepare_selected_private_hit_review(*, combined, search, reviewer_context,
                         'https://docs.google.com/spreadsheets/d/')):
                 raise ValueError('private Google Sheets origin invalid')
 
+    # The caller must independently verify each gid from Google Sheets
+    # metadata in its authenticated session. This function cannot prove it.
+    if sheet_gid_by_url is None:
+        sheet_gid_by_url = {}
+    if (not isinstance(sheet_gid_by_url, dict)
+            or len(sheet_gid_by_url) > len(docs)):
+        raise ValueError('invalid authenticated sheet location mapping')
+    allowed_urls = {
+        origin['source_url'] for kind, origin in zip(kinds, origins)
+        if kind == 'sheets'
+    }
+    for source_url, gid in sheet_gid_by_url.items():
+        if (not isinstance(source_url, str)
+                or source_url not in allowed_urls
+                or type(gid) is not int
+                or not 0 <= gid <= 2147483647):
+            raise ValueError('invalid or unselected Sheets gid mapping')
+
     selected = []
     for hit in hits[:max_hits]:
         si, ri = hit['source_index'], hit['record_index']
@@ -151,6 +170,12 @@ def prepare_selected_private_hit_review(*, combined, search, reviewer_context,
         if label is None:
             label = (origin['relative_path'] if kind == 'excel'
                      else doc['source_sheet'])
+        row_url = None
+        if kind == 'sheets' and origin['source_url'] in sheet_gid_by_url:
+            # Exact selected tab/range, no guessed gid, no API call.
+            gid = sheet_gid_by_url[origin['source_url']]
+            line = record['source_row']
+            row_url = f"{origin['source_url']}#gid={gid}&range=A{line}:O{line}"
         selected.append({
             'supplier_or_source_label': label,
             'label_provenance': ('caller_declared_unverified'
@@ -163,6 +188,8 @@ def prepare_selected_private_hit_review(*, combined, search, reviewer_context,
                                    if kind == 'sheets' else None),
             'original_sheet_tab': _safe_text(doc['source_sheet'], 128),
             'original_physical_row': record['source_row'],
+            'original_row_url': row_url,
+            'row_link_gid_verified_by_this_function': False,
             'matched_field': field,
             'manufacturer_name': _safe_text(
                 record.get('manufacturer_name_raw')),
