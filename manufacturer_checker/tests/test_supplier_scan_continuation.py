@@ -6,6 +6,7 @@ import unittest
 from supplier_docs.supplier_scan_continuation import (
     scan_next_selected_supplier_sheet, public_scan_progress,
 )
+from supplier_docs.supplier_drive_version import DRIVE_VERSION_KIND
 
 FID = "SYNTHETIC_LONG_SUPPLIER_00001"
 JAN = "0000000000017"
@@ -35,7 +36,7 @@ def approved(*, count=500, header=1, tab="見積もり"):
 
 class FakeDrive:
     def __init__(self):
-        self.revision = "modifiedTime_2026-11-09T00:00:00Z"
+        self.revision = "103"
         self.revision_change_after = None
         self.revision_calls = 0
         self.reads = []
@@ -50,8 +51,10 @@ class FakeDrive:
         self.revision_calls += 1
         if (self.revision_change_after is not None
                 and self.revision_calls > self.revision_change_after):
-            return {"spreadsheet_id": FID, "revision": "new_version_2"}
-        return {"spreadsheet_id": FID, "revision": self.revision}
+            return {"spreadsheet_id": FID, "revision_kind": DRIVE_VERSION_KIND,
+                    "version": "104"}
+        return {"spreadsheet_id": FID, "revision_kind": DRIVE_VERSION_KIND,
+                "version": self.revision}
 
     def read(self, *, spreadsheet_id, sheet_name, requested_range,
              value_render_option):
@@ -143,7 +146,7 @@ class SupplierScanContinuationTests(unittest.TestCase):
         drive=FakeDrive()
         first=self.run_scan(drive)
         old_reads=len(drive.reads)
-        drive.revision="new_version_2"
+        drive.revision="104"
         with self.assertRaisesRegex(ValueError,"revision changed"):
             self.run_scan(drive,cursor=first["private_cursor"])
         self.assertEqual(len(drive.reads),old_reads)
@@ -199,7 +202,7 @@ class SupplierScanContinuationTests(unittest.TestCase):
         drive=FakeDrive()
         def incomplete(*,spreadsheet_id):
             return {"spreadsheet_id":spreadsheet_id}
-        with self.assertRaisesRegex(ValueError,"revision evidence"):
+        with self.assertRaisesRegex(ValueError,"Drive v3 file-version evidence"):
             scan_next_selected_supplier_sheet(
                 supplier_query="架空卸A",
                 search={"field":"jan","query":JAN},
