@@ -17,7 +17,7 @@ Google Drive上のメーカー見積書や商品一覧が200行を超える場�
 
 入力アダプターは両方必須：
 - `fetch_formula_range(spreadsheet_id, sheet_name, requested_range, value_render_option='FORMULA')`：本人が認証した読み取り専用Google Drive接続が**実際に取得**した結果を、正しいファイル／タブ／レンジ／`FORMULA`付きの5キーで返す。API失敗時は例外、**空配列にして続けてはならない**。
-- `get_source_revision(spreadsheet_id)`：**元ファイルの変更を検知できる十分に信頼できる版識別子**を `{'spreadsheet_id':..., 'revision':'opaque-revision'}` で返す。ファイルIDが合わない、値が不正、版が変わった場合は検索停止。実データ／認証情報を返さない。信頼できる変更検知トークンがない場合は**バッチまたぎの検索を本番運用しない**。
+- `get_source_revision(spreadsheet_id)`：**Google Drive v3 files.get の raw version と元ファイルID/MIMEの厳格な照合**を `{'spreadsheet_id':..., 'revision_kind':'google_drive_v3_monotonic_file_version', 'version':'123'}` で返す。ファイルIDが合わない、値が不正、版が変わった場合は検索停止。実データ／認証情報を返さない。信頼できる変更検知トークンがない場合は**バッチまたぎの検索を本番運用しない**。
 
 最初のバッチでは版識別子を読取前後で照合し、ヘッダーと最終物理行のSHA-256指紋をPrivateカーソルに保持する。2回目以降は**原本ファイル・gid・元タブ・グリッド行数・ヘッダー行・検索条件が同じ**か確認したあと、前回の版情報を再検査。ヘッダーを再読込し、**直前バッチ最後の物理行を再取得**して指紋が同じか検査する。全ページ読み終わった後に版情報を再取得して差異があればバッチ全体を破棄する。
 
@@ -58,7 +58,13 @@ second = scan_next_selected_supplier_sheet(
 - 井上の実Google Sheets「見積もり」のメタデータが取得可能であり、Google Driveの`modified_time`が取得できることを確認。認証済み読取の `FORMULA` で**A196:O196、A197:O235、A236:O274、A275:O313**を安全な上限内で確認。**第1データページ39非空行・第2ページ20非空行・第3ページ0非空行**、前後の`modified_time`は一致。原本を変更していない。これは**実範囲の読取確認**であり、**今回の新しい継続スキャナに実データを投入した完全E2Eではない**。Google Driveの強い版保証も未確定。
 
 ## 次の工程（未完了）
-1. 認証済みChatGPT/Drive等のホストが保証できる**原本版番号の取得可否と改変時の更新保証**を検証し、単なる`modified_time`で足りない場合は確実な版識別を提供できる接続方法を設計。
+1. 認証済みChatGPT/Drive等のホストが保証できる**原本版番号の取得可否と改変時の更新保証**を検証し、単なる`modified_time`で足りない場合はraw Google Drive v3 files.version を提供できる認証済み接続方法を設計。
 2. ChatGPTからPrivateカーソルを安全に維持し、次ページを呼び出せる**恒常的な認証付きアダプター／UI**。現状は読み取った行をPrivateメモリで処理する試作。
 3. 複数の選択タブと112社への対象管理を段階的に拡張。**全社全タブの検索完了、在庫・原価・仕入判断は未実装**。
 4. GitHub Actions→Google WIF→Readerの実認証は、コスト・権限・IAMレビュー後に実施する。新有料サービス、Secrets、IAM、本番Actionsはこの工程で触らない。
+
+## 後続の必須安全改修（2026-11-09）
+
+- [Google Drive v3の単調増加版番号を必須にするアダプター](SUPPLIER_DRIVE_VERSION.md) を新設。`supplier_scan_continuation.py`では、**`revision_kind='google_drive_v3_monotonic_file_version'`と、1以上のdec int64文字列`version`**だけを版照合に使う。任意の`revision`文字列、`modifiedTime`、最新変更履歴IDは拒否する。
+- 実際に現在のChatGPT Google Drive接続へ `fields=...version...` を指定したが、**接続の正規化された戻り値にはversionがない**。したがって、raw Google Drive v3 files.get のversionが得られる別の認証済みアダプターが整うまで、**実資料のバッチ間継続検索は本番利用しない**。
+- 新しい合成テスト11件、従来の継続テスト17件の改修を含め、**728件のCIテストが成功**。実メーカー商品や認証情報は公開GitHubへ渡していない。
