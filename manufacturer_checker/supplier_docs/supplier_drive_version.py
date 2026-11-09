@@ -98,3 +98,26 @@ def make_drive_v3_version_adapter(authenticated_raw_files_get):
         return strict_drive_v3_version(
             metadata=response, expected_file_id=spreadsheet_id)
     return get_source_revision
+
+
+def make_googleapiclient_drive_version_reader(drive_v3_metadata_service):
+    """Bind the existing restricted Drive v3 client to raw files.version.
+
+    Caller must construct this client with the dedicated Reader identity and
+    drive.metadata.readonly OAuth scope, and verify selected file access. No
+    additional OAuth credentials or IAM grants are created by this function.
+    Errors are deliberately redacted by make_drive_v3_version_adapter.
+    """
+    if (drive_v3_metadata_service is None
+            or not callable(getattr(drive_v3_metadata_service, 'files', None))):
+        raise ValueError('Drive v3 metadata client required')
+
+    def raw_files_get(*, file_id, fields):
+        # The only metadata allowed is the exact three-field version read.
+        if fields != FIELDS:
+            raise ValueError('unapproved Drive metadata field selection')
+        return drive_v3_metadata_service.files().get(
+            fileId=file_id, fields=FIELDS, supportsAllDrives=True,
+        ).execute(num_retries=0)
+
+    return make_drive_v3_version_adapter(raw_files_get)
