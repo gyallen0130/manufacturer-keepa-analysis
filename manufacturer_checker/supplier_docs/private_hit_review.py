@@ -33,7 +33,7 @@ def _safe_text(value, limit=500):
     return value
 
 
-def _validate_context(context):
+def validate_private_reviewer_context(context):
     # The flags document checks made by the trusted application layer.
     # A caller setting True does not constitute identity/access proof.
     if not isinstance(context, dict) or context != _REVIEW_CONTEXT:
@@ -51,7 +51,7 @@ def prepare_selected_private_hit_review(*, combined, search, reviewer_context,
     Return is PRIVATE ONLY and must never be serialized to a shared log.
     The regular public-only one-shot API remains unchanged.
     """
-    _validate_context(reviewer_context)
+    validate_private_reviewer_context(reviewer_context)
     if (not isinstance(search, dict) or set(search) != {'field', 'query'}):
         raise ValueError('private review requires a bounded lookup')
     field, _ = validate_source_lookup(search['field'], search['query'])
