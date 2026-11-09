@@ -1,0 +1,61 @@
+# TEMPLATE ONLY. Never install or enable without separate owner approval.
+# This is the MINIMUM FIRST LIVE TEST, not the full supplier document workflow.
+# If approved, place this file in the separately reviewed PRIVATE repo at:
+# .github/workflows/supplier-readonly.yml
+# The WIF condition must be pinned to the exact reviewed workflow SHA and
+# checkout source commit SHA. This template is NOT installed anywhere.
+# Requires reviewed source files in private repo and one approved Sheet ID
+# in the PRIVATE repository secret SUPPLIER_APPROVED_SHEET_ID.
+# Do not run until Google WIF IAM, code, private repo settings and GitHub
+# Actions+Artifacts billing/stop controls have been independently reviewed.
+name: Supplier Google Drive VERSION ONLY - PRIVATE manual probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supplier-manual-version-only
+  cancel-in-progress: false
+
+jobs:
+  version:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      github.event.repository.private == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      SUPPLIER_APPROVED_SHEET_ID: ${{ secrets.SUPPLIER_APPROVED_SHEET_ID }}
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+    steps:
+      - name: Checkout individually reviewed private source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Use reviewed Python version
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11'
+      - name: Install reviewed hash-locked wheels
+        run: |
+          python -m pip install --disable-pip-version-check \
+            --require-hashes --only-binary=:all: \
+            -r manufacturer_checker/supplier_docs/approved-requirements-hashed.txt
+          python -m pip check
+      - name: Authenticate to the dedicated read-only Google Reader
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: ${{ vars.SUPPLIER_WIF_PROVIDER }}
+          service_account: ${{ vars.SUPPLIER_READER_SA }}
+          create_credentials_file: true
+          export_environment_variables: true
+      - name: Probe exactly one approved Sheet metadata version (no Sheet content)
+        working-directory: manufacturer_checker
+        run: python -m supplier_docs.manual_drive_version_probe --confirm-readonly
