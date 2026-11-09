@@ -24,6 +24,7 @@ from .connector_sheets_paged import (
 from .multi_source_readonly import validate_source_lookup
 from .private_hit_review import validate_private_reviewer_context
 from .supplier_query_planner import plan_supplier_sheet_reads
+from .supplier_drive_version import strict_revision_evidence
 
 SCHEMA_VERSION = 'private-supplier-scan-cursor-v1'
 CURSOR_KEYS = frozenset((
@@ -80,15 +81,12 @@ def _revision(get_source_revision, source):
         info = get_source_revision(spreadsheet_id=source['spreadsheet_id'])
     except Exception:
         raise RuntimeError('authorized source revision read failed') from None
-    if (not isinstance(info, dict)
-            or set(info) != {'spreadsheet_id', 'revision'}
-            or info['spreadsheet_id'] != source['spreadsheet_id']
-            or not isinstance(info['revision'], str)
-            or not 1 <= len(info['revision']) <= 200
-            or any(ord(ch) < 33 or ord(ch) > 126
-                   for ch in info['revision'])):
-        raise ValueError('valid revision evidence required for continuation')
-    return _digest(info['revision'])
+    version = strict_revision_evidence(
+        evidence=info, expected_file_id=source['spreadsheet_id'])
+    # Only a typed, strictly validated monotonic Drive v3 file version can
+    # prove that previously examined batches were not modified. A timestamp
+    # or revisions.list id is not an acceptable production fallback.
+    return _digest(('google_drive_v3_monotonic_file_version', version))
 
 
 def _check_cursor(cursor, *, source_digest, query_digest, header):
