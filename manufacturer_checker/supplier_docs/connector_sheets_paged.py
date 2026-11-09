@@ -146,8 +146,17 @@ def _collect(*, manifest, search):
             result = normalize_selected_connector_snapshots(manifest=selected)
             doc = result['private_normalized_docs'][0]
             status = doc['source_status']
-            mappings = (doc.get('mapped_columns', {}),
-                        doc.get('inferred_columns', {}))
+            # Unlabeled source profit commentary can be inferred on one
+            # bounded page and absent on another. That field is neither
+            # searched nor exposed by the private viewer: ignore only this
+            # inference for cross-page stability. Identity-related fields,
+            # including inferred ASIN, must agree on every page.
+            search_inferences = {
+                key: value for key, value in
+                doc.get('inferred_columns', {}).items()
+                if key != 'source_profit_label'
+            }
+            mappings = (doc.get('mapped_columns', {}), search_inferences)
             if original_doc is None:
                 original_doc, expected_status, expected_mapping = doc, status, mappings
             elif status != expected_status or mappings != expected_mapping:
