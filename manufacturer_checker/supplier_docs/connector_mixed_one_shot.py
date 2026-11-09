@@ -72,6 +72,8 @@ def inspect_private_connector_mixed(*, root_dir, excel_manifest,
         for source in connector_sheet_manifest['sources']
     )
     aggregate.update({
+        'formula_cells_in_supplied_sheet_windows': sheets['public_summary']['formula_cells_present'],
+        'formula_cell_values_not_evaluated': True,
         'numeric_jan_candidates_require_review': numeric_jan_warnings,
         'native_sheet_exports_require_formula_review': exported_sheet_count,
         'native_export_price_or_lot_trust_allowed': False,
