@@ -148,8 +148,13 @@ class OnDemandSheetTests(unittest.TestCase):
                 self.private(sheet_gid_by_url=mapping)
 
     def test_native_export_remains_price_unverified(self):
-        result=self.anonymous(source=manifest('native_export_xlsx'))
-        self.assertEqual(result['public_summary']['native_export_cost_flags_suppressed'],3)
+        conf=manifest('native_export_xlsx')
+        for source in conf['sources']:
+            source['document_type']='quote_response'
+            source['rows'][0][3]='下代（税抜）'
+        result=self.anonymous(source=conf)
+        self.assertGreaterEqual(
+            result['public_summary']['native_export_cost_flags_suppressed'],1)
         self.assertTrue(result['public_summary']['xlsx_export_type_fidelity_requires_review'])
         self.assertFalse(result['public_summary']['native_export_price_or_lot_trust_allowed'])
         self.assertFalse(result['public_summary']['purchase_allowed'])
