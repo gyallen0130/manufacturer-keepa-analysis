@@ -17,17 +17,9 @@ from .mixed_source_readonly import combine_selected_source_results
 from .multi_source_readonly import MAX_SOURCES, validate_source_lookup
 
 
-def inspect_private_connector_mixed(*, root_dir, excel_manifest,
-                                    connector_sheet_manifest, search=None):
-    """Combine authorized in-memory Sheet windows and local Excel (<=5 tabs).
-
-    No auth is acquired or verified. Use an independently authorized connector
-    for the Sheet windows, A1:O40 maximum, and keep the raw arrays private.
-
-    The function returns public summaries ONLY; downstream source rows and
-    detailed hits are discarded. A zero local API count never means the caller
-    did not perform an upstream connector read.
-    """
+def _collect_private_sources(*, root_dir, excel_manifest,
+                             connector_sheet_manifest, search):
+    """Shared bounded selection and parsing, without authentication or writes."""
     selected_excel = validate_excel_manifest(excel_manifest)
     if (not isinstance(connector_sheet_manifest, dict)
             or set(connector_sheet_manifest) != {
@@ -54,6 +46,27 @@ def inspect_private_connector_mixed(*, root_dir, excel_manifest,
         root_dir=root_dir, manifest=excel_manifest)
     combined = combine_selected_source_results(
         [excel, sheets], search=search)
+
+    return combined, sheets
+
+
+def inspect_private_connector_mixed(*, root_dir, excel_manifest,
+                                    connector_sheet_manifest, search=None):
+    """Combine authorized in-memory Sheet windows and local Excel (<=5 tabs).
+
+    No auth is acquired or verified. Use an independently authorized connector
+    for the Sheet windows, A1:O40 maximum, and keep the raw arrays private.
+
+    The function returns public summaries ONLY; downstream source rows and
+    detailed hits are discarded. A zero local API count never means the caller
+    did not perform an upstream connector read.
+    """
+    combined, sheets = _collect_private_sources(
+        root_dir=root_dir,
+        excel_manifest=excel_manifest,
+        connector_sheet_manifest=connector_sheet_manifest,
+        search=search,
+    )
 
     aggregate = dict(combined['public_summary'])
     # The parser can preserve numeric JANs as SEARCH CANDIDATES with a warning.
@@ -92,3 +105,38 @@ def inspect_private_connector_mixed(*, root_dir, excel_manifest,
         'public_search_summary': combined.get('public_search_summary'),
         'private_details_returned': False,
     }
+
+
+
+def inspect_private_connector_mixed_for_review(
+        *, root_dir, excel_manifest, connector_sheet_manifest,
+        search, reviewer_context, source_labels=None, max_hits=20):
+    """Return a PRIVATE, user-visible selected-source hit review.
+
+    The calling application MUST enforce identity, selected-file access and
+    private destination. The caller's four affirmative context flags are
+    declarations, NOT authentication. This function has no access to Google
+    OAuth, user accounts, network, public CI or persistent storage.
+
+    The public-only inspect_private_connector_mixed() remains the default.
+    NEVER print/log/commit this function's return value.
+    """
+    from .private_hit_review import (
+        prepare_selected_private_hit_review,
+        validate_private_reviewer_context,
+    )
+    # Fail early: a missing explicit opt-in must not even open private files.
+    validate_private_reviewer_context(reviewer_context)
+    if search is None:
+        raise ValueError('private review requires a search')
+    combined, _ = _collect_private_sources(
+        root_dir=root_dir,
+        excel_manifest=excel_manifest,
+        connector_sheet_manifest=connector_sheet_manifest,
+        search=search,
+    )
+    return prepare_selected_private_hit_review(
+        combined=combined, search=search,
+        reviewer_context=reviewer_context,
+        source_labels=source_labels, max_hits=max_hits,
+    )
