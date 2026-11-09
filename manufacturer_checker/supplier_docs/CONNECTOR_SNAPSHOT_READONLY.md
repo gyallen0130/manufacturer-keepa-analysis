@@ -64,3 +64,33 @@ print(sheets_private['public_summary'])  # 集計件数のみ
 
 [架空のコネクタスナップショットを使う13件のテスト](../tests/test_supplier_connector_sheet_snapshot.py)で入力上限・価格保留・秘密非出力・Excelとの混在検索を検証。
 
+
+
+## 2026-11-09: 実Google認証をPythonに移さない「Excel＋Sheets一括検索」入口
+
+新規の [connector_mixed_one_shot.py](connector_mixed_one_shot.py) は、認証済みのChatGPT/Google Driveコネクタから**必要なシート範囲だけを事前に取得**した場合に、それを同じ非公開プロセス内でExcelと横断検索できる、単純な開発用入口である。
+
+- **GitHub Actions→WIFや専用Readerの実認証が未完成でも**、ChatGPTに接続済みのGoogle Driveを利用する手動の実務検証を進められる。
+- Excelマニフェストは既存の`manual-local-excel-v1`。Sheetsスナップショットは`manual-connector-sheet-snapshot-v1`。**両方合わせて5タブ以内、各A1:O40**。ChatGPT/Driveが先に該当ファイルの権限・タブ名を確認する。
+- **GoogleのOAuthトークンはPythonへ渡さない**。シートの元行列は許可されたprivateプロセスのメモリ中だけで扱い、関数が返すのは匿名`public_summary`と`public_search_summary`のみ。原本行・検索語・仕入原価・ファイルIDは戻り値に含まれない。
+- `api_calls=0`は**このPython関数自身**のAPI呼び出し回数であり、事前にChatGPTのDriveコネクタがした読取件数ではない。外部認証検証も`False`のまま。
+- **本番自動同期、実Google APIへのPython直接ログイン、利益判定・発注は依然未完成**。追加課金・IAM/WIF更新・Private RepoへのWorkflow追加を行わない。
+
+プライベートなPythonプロセスで、認可済みの値を**変数として渡すだけ**の使用例：
+
+```python
+from supplier_docs.connector_mixed_one_shot import inspect_private_connector_mixed
+
+# approved_excel_manifest はPrivate内の承認済みExcel設定。
+# private_connector_manifest は、既存Google Driveコネクタが取得した
+# 最大40行・15列のFORMULA行列を含むPrivateメモリ内の辞書。
+result = inspect_private_connector_mixed(
+    root_dir="/private/approved-excel",
+    excel_manifest=approved_excel_manifest,
+    connector_sheet_manifest=private_connector_manifest,
+    search={"field": "asin", "query": private_requested_asin},
+)
+print(result["public_summary"])  # 匿名統計のみ
+```
+
+呼出元は、検索条件と取得した元セル値を**公開CI、開発リポジトリ、ログ、チャット内の引用に貼り付けない**。入力は事前に取得した実データでも、**今回追加したテスト自体は架空データ**。新規[9件の合成データ安全テスト](../tests/test_supplier_connector_mixed_one_shot.py)で検索・5タブ上限・出力抑止・非更新・失敗時の停止を検査する。
