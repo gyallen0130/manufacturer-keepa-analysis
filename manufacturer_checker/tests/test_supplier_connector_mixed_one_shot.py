@@ -134,5 +134,64 @@ class ConnectorMixedOneShotTests(unittest.TestCase):
         self.assertFalse(result['public_summary']['purchase_allowed'])
 
 
+    def test_numeric_jan_from_two_different_header_rows_needs_review(self):
+        # Synthetic geometry based on two REAL-world classes of quote sheet:
+        # one with row-14 headers, the other with row-1 headers.
+        # Never embed any supplier's actual JAN, name or price in CI.
+        synthetic = Workbook()
+        page = synthetic.active
+        page.title = 'Header14'
+        page.cell(row=14, column=2, value='商品名')
+        page.cell(row=14, column=13, value='JAN')
+        page.cell(row=15, column=2, value='架空の卸見積商品')
+        page.cell(row=15, column=13, value=4901234567894)
+        synthetic.save(self.root / 'header14.xlsx')
+        synthetic.close()
+        original = (self.root / 'header14.xlsx').read_bytes()
+
+        excel = deepcopy(self.excel)
+        excel['targets'][0].update({
+            'relative_path': 'header14.xlsx',
+            'sheet_name': 'Header14',
+            'header_row': 14,
+        })
+        sheets = deepcopy(self.sheets)
+        sheets['sources'][0].update({
+            'rows': [
+                ['商品名', 'JAN'],
+                ['架空のSheets商品', 4901234567894],
+            ],
+            'snapshot_method': 'native_export_xlsx',
+        })
+        result = self.run_probe(
+            excel_manifest=excel, connector_sheet_manifest=sheets,
+            search={'field': 'jan', 'query': '4901234567894'})
+        summary = result['public_summary']
+        # Numeric values remain searchable candidates; they do NOT prove
+        # preservation of leading zero or product identity.
+        self.assertGreaterEqual(
+            summary['numeric_jan_candidates_require_review'], 2)
+        self.assertEqual(
+            summary['native_sheet_exports_require_formula_review'], 1)
+        self.assertFalse(summary['source_formula_fidelity_verified'])
+        self.assertFalse(summary['native_export_price_or_lot_trust_allowed'])
+        self.assertEqual(summary['confirmed_product_matches'], 0)
+        self.assertFalse(summary['profit_calculation_allowed'])
+        self.assertFalse(result['public_search_summary']['product_identity_confirmed'])
+        self.assertEqual((self.root / 'header14.xlsx').read_bytes(), original)
+        public = json.dumps(result, ensure_ascii=False)
+        self.assertNotIn('4901234567894', public)
+        self.assertNotIn('架空の卸見積商品', public)
+        self.assertNotIn('架空のSheets商品', public)
+
+    def test_safe_fidelity_fields_also_present_for_live_formula_snapshot(self):
+        result = self.run_probe()
+        summary = result['public_summary']
+        self.assertEqual(summary['numeric_jan_candidates_require_review'], 0)
+        self.assertEqual(summary['native_sheet_exports_require_formula_review'], 0)
+        self.assertFalse(summary['source_formula_fidelity_verified'])
+        self.assertFalse(summary['native_export_price_or_lot_trust_allowed'])
+
+
 if __name__ == '__main__':
     unittest.main()
