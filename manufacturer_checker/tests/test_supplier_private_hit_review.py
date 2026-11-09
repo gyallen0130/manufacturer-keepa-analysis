@@ -267,5 +267,40 @@ class PrivateHitReviewTests(unittest.TestCase):
                 reviewer_context=PRIVATE_CONTEXT)
 
 
+    def test_authenticated_tab_gid_builds_only_selected_private_row_link(self):
+        source_url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/edit'
+        review = self.review(sheet_gid_by_url={source_url: 56789})
+        excel_hit, sheet_hit = review['private_hits']
+        self.assertIsNone(excel_hit['original_row_url'])
+        self.assertEqual(
+            sheet_hit['original_row_url'],
+            source_url + '#gid=56789&range=A2:O2')
+        self.assertFalse(sheet_hit['row_link_gid_verified_by_this_function'])
+        public = inspect_private_connector_mixed(
+            root_dir=self.root, excel_manifest=self.excel,
+            connector_sheet_manifest=self.sheets, search=self.search)
+        self.assertNotIn('gid=56789', json.dumps(public))
+
+    def test_unverified_gid_does_not_create_fake_row_url(self):
+        hits = self.review()['private_hits']
+        self.assertTrue(all(h['original_row_url'] is None for h in hits))
+
+    def test_unselected_or_invalid_gid_mapping_rejected(self):
+        source_url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/edit'
+        for mapping in [
+            {'https://docs.google.com/spreadsheets/d/OTHER/edit': 1},
+            {source_url: True},
+            {source_url: '123'},
+            {source_url: -1},
+            {source_url: 2147483648},
+            {source_url: 1.0},
+            {source_url: 1, 'https://docs.google.com/spreadsheets/d/OTHER/edit': 2},
+            [source_url, 123],
+        ]:
+            with self.subTest(mapping=mapping):
+                with self.assertRaises(ValueError):
+                    self.review(sheet_gid_by_url=mapping)
+
+
 if __name__ == '__main__':
     unittest.main()
