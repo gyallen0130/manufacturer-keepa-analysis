@@ -110,7 +110,8 @@ def inspect_private_connector_mixed(*, root_dir, excel_manifest,
 
 def inspect_private_connector_mixed_for_review(
         *, root_dir, excel_manifest, connector_sheet_manifest,
-        search, reviewer_context, source_labels=None, max_hits=20):
+        search, reviewer_context, source_labels=None, max_hits=20,
+        sheet_gid_by_url=None):
     """Return a PRIVATE, user-visible selected-source hit review.
 
     The calling application MUST enforce identity, selected-file access and
@@ -139,4 +140,5 @@ def inspect_private_connector_mixed_for_review(
         combined=combined, search=search,
         reviewer_context=reviewer_context,
         source_labels=source_labels, max_hits=max_hits,
+        sheet_gid_by_url=sheet_gid_by_url,
     )
