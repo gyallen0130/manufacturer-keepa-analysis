@@ -49,6 +49,29 @@ def strict_drive_v3_version(*, metadata, expected_file_id):
     }
 
 
+
+def strict_revision_evidence(*, evidence, expected_file_id):
+    """Validate a revision-provider result before persisting its fingerprint."""
+    if (not isinstance(evidence, dict)
+            or set(evidence) != {
+                'spreadsheet_id', 'revision_kind', 'version'
+            } or evidence['spreadsheet_id'] != expected_file_id
+            or evidence['revision_kind'] != DRIVE_VERSION_KIND):
+        raise ValueError('trusted Drive v3 file-version evidence required')
+    # Reuse exact int64 and document identity validation. No timestamp-only
+    # or revisions-list fallback is accepted.
+    strict_drive_v3_version(
+        metadata={
+            'id': evidence['spreadsheet_id'],
+            'mimeType': GOOGLE_SHEET_MIME,
+            'version': evidence['version'],
+        },
+        expected_file_id=expected_file_id,
+    )
+    return evidence['version']
+
+
+
 def make_drive_v3_version_adapter(authenticated_raw_files_get):
     """Adapt an authenticated Google Drive v3 files.get reader.
 
